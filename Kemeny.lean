@@ -1,6 +1,7 @@
 import Kemeny.Rankings
 import Kemeny.Margins
 import Kemeny.KemenyScore
+import Kemeny.CloneContraction
 import Kemeny.Source
 
 /-!
