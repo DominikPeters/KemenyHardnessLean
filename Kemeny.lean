@@ -7,6 +7,7 @@ import Kemeny.CloneContraction
 import Kemeny.Source
 import Kemeny.Source.Certified
 import Kemeny.FromMaxCut.Construction
+import Kemeny.FromMaxCut.CanonEdges
 import Kemeny.FromMaxCut.Margins
 import Kemeny.FromMaxCut.MinTotal
 import Kemeny.FromMaxCut.Forward
