@@ -9,6 +9,7 @@ import Kemeny.FromMaxCut.Forward
 import Kemeny.FromMaxCut.Meta
 import Kemeny.FromMaxCut.Gadget
 import Kemeny.FromMaxCut.Reverse
+import Kemeny.FromMaxCut.EdgeCost
 
 /-!
 # The Kemeny three-voters project

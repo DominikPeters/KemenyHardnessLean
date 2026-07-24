@@ -308,8 +308,9 @@ is a `decide`. -/
 
 /-- One voter's verdict on a vertex–edge pair, as the comparison of the
 voter's positions: cost `0` exactly if the voter ranks the vertex candidate
-above the edge candidate. -/
-private theorem againstCount_singleton_ve (V : VoterSpec n G) (e : EdgePair n G)
+above the edge candidate. Public: the reverse direction's edge-cost engine
+reads the same verdicts. -/
+theorem againstCount_singleton_ve (V : VoterSpec n G) (e : EdgePair n G)
     (s : Side) (u : Fin n) (x : Letter) (m : Fin M) :
     againstCount [V.ranking M] (Sum.inl (u, x, m)) (Sum.inr (e, s))
       = if V.gadgetPos u < V.gadgetPos (V.edgeGadget e s)
