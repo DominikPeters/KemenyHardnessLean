@@ -160,5 +160,18 @@ theorem decodeBallot_eq_mapOrder {α : Type} (Nu : Numbering α)
     idxOf_lt_iff_of_sorted r hsort (hcomp _) (hcomp _)]
   exact (mapOrder_lt Nu.equivFin r a b).symm
 
+/-- **The bridge at a transported size.** The decoded instance counts its
+candidates as the *length of the emitted candidate list*, which the numbering's
+`size` only equals — it is not that term. Since the count is a type index, the
+equation has to be carried by the bijection, which is what this restatement
+does. -/
+theorem decodeBallot_eq_mapOrder' {α : Type} (Nu : Numbering α)
+    (r : LinearOrder α) (L : List α) (hsort : L.Pairwise fun a b ↦ r.lt a b)
+    (hcomp : ∀ a, a ∈ L) {N : ℕ} (hN : Nu.size = N) :
+    decodeBallot N (L.map Nu.num) = mapOrder (Nu.equivFin.trans (finCongr hN)) r := by
+  subst hN
+  rw [decodeBallot_eq_mapOrder Nu r L hsort hcomp]
+  rfl
+
 end Cert
 end Hardness
