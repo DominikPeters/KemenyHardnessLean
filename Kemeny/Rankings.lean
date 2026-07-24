@@ -63,6 +63,12 @@ theorem ranks_asymm {r : LinearOrder A} {a b : A} (h : r.lt a b) : ¬r.lt b a :=
   letI := r
   exact lt_asymm h
 
+/-- Rankings are transitive, in bundled form. -/
+theorem ranks_trans {r : LinearOrder A} {a b c : A} (h1 : r.lt a b) (h2 : r.lt b c) :
+    r.lt a c := by
+  letI := r
+  exact lt_trans h1 h2
+
 /-- A ranking ranks every pair of distinct alternatives one way or the other:
 totality, in the form the case splits consume. -/
 theorem ranks_of_not_ranks {r : LinearOrder A} {a b : A} (hne : a ≠ b) (h : ¬r.lt a b) :

@@ -104,6 +104,7 @@ pairs, with the unranked orientation contributing `0`, lets a structured
 alternative type split the sum along its sums and products — explicit block
 decompositions instead of pair-set cardinalities. -/
 
+omit [Fintype A] in
 /-- The margin cost of one ordered pair: the (truncated) margin paid if `r`
 ranks `a` above `b`, else `0`. -/
 def orientedMargin (voters : List (LinearOrder A)) (r : LinearOrder A) (a b : A) : ℕ :=
