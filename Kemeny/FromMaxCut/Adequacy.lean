@@ -124,9 +124,9 @@ theorem not_kemenyScore_decodeNo :
 
 /-! ## Adequacy -/
 
-/-- Every produced instance has three voters, on both branches. -/
-theorem decodeKemeny_voters_length (x : GraphTy.denote) :
-    (decodeKemeny (kemenyCode.eval x)).voters.length = 3 := by
+/-- Every produced instance carries three ballots, on both branches. -/
+theorem kemenyCode_ballots_length (x : GraphTy.denote) :
+    (kemenyCode.eval x).2.1.length = 3 := by
   rw [kemenyCode_eval]
   by_cases hg : guardCode.eval x = true
   · rw [if_pos hg]
@@ -156,10 +156,10 @@ theorem kemenyScore_decodeKemeny (x : GraphTy.denote) :
 /-- **Adequacy of the profile program.** -/
 theorem kemenyCode_correct (x : GraphTy.denote) :
     Concrete.SIMPLE_MAX_CUT_LEE x ↔ Concrete.KEMENY_SCORE_3VOTERS (kemenyCode.eval x) := by
-  rw [Concrete.SIMPLE_MAX_CUT_LEE, Problem.comap, simpleMaxCutLee_iff_kemeny (decodeNumbered x)]
-  simp only [Concrete.KEMENY_SCORE_3VOTERS, Problem.comap, KEMENY_SCORE_3VOTERS, Problem.restrict]
+  rw [Concrete.SIMPLE_MAX_CUT_LEE, Problem.comap, simpleMaxCutLee_iff_kemeny (decodeNumbered x),
+    KEMENY_SCORE_3VOTERS, Problem.restrict, Concrete.kemenyScore3Voters_iff]
   exact Iff.and
-    (iff_of_true (kemenyLeeMap_voters_length _) (decodeKemeny_voters_length x))
+    (iff_of_true (kemenyLeeMap_voters_length _) (kemenyCode_ballots_length x))
     (kemenyScore_decodeKemeny x)
 
 /-- **SIMPLE MAX CUT with long even edges → KEMENY SCORE with three voters,

@@ -1,4 +1,5 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Fintype.Prod
 import HardnessReductions.Core
 
@@ -166,6 +167,41 @@ theorem againstCount_add_againstCount {a b : A} (voters : List (LinearOrder A))
       · rw [if_pos (ranks_of_not_ranks h hab), if_neg hab]
     omega
 
+/-! ## Orienting a pair function
+
+Both cost decompositions of the project charge a pair function only in the
+orientation the output ranking picks: the Kemeny cost charges `againstCount`
+(`orientedCost`, `CloneContraction.lean`), the margin cost charges the margin
+(`orientedMargin`, `Margins.lean`). `orient` is that common shape, so the two
+share their comparison laws and the index change to the ordered square
+(`sum_rankedPairs_eq_sum_orient`). -/
+
+/-- A pair function read in the orientation `r` ranks: `f a b` if `r` ranks `a`
+above `b`, else `0`. Summing over *both* orientations of a pair therefore gives
+the pair's value once, so summing over the whole ordered square double-counts
+nothing. -/
+def orient (r : LinearOrder A) (f : A → A → ℕ) (a b : A) : ℕ :=
+  letI := r.toDecidableLT
+  if r.lt a b then f a b else 0
+
+theorem orient_of_lt {r : LinearOrder A} {a b : A} (f : A → A → ℕ) (h : r.lt a b) :
+    orient r f a b = f a b := by
+  letI := r.toDecidableLT
+  rw [orient, if_pos h]
+
+theorem orient_of_not_lt {r : LinearOrder A} {a b : A} (f : A → A → ℕ) (h : ¬r.lt a b) :
+    orient r f a b = 0 := by
+  letI := r.toDecidableLT
+  rw [orient, if_neg h]
+
+/-- Two rankings agreeing on an ordered pair orient a pair function the same way
+there: the oriented value reads the ranking only through that one comparison. -/
+theorem orient_congr {r r' : LinearOrder A} {a b : A} (f : A → A → ℕ)
+    (h : r.lt a b ↔ r'.lt a b) : orient r f a b = orient r' f a b := by
+  by_cases hab : r.lt a b
+  · rw [orient_of_lt f hab, orient_of_lt f (h.mp hab)]
+  · rw [orient_of_not_lt f hab, orient_of_not_lt f fun hc ↦ hab (h.mpr hc)]
+
 /-! ## The Kendall tau distance -/
 
 variable [Fintype A]
@@ -243,6 +279,22 @@ def rankedPairs (r : LinearOrder A) : Finset (A × A) :=
     p ∈ rankedPairs r ↔ r.lt p.1 p.2 := by
   letI := r.toDecidableLT
   simp only [rankedPairs, mem_filter_univ]
+
+/-- **From ranked pairs to the ordered square**: summing a pair function over
+the pairs `r` ranks is summing its oriented form over *all* ordered pairs, the
+unranked orientation contributing `0`. The index shape that lets a structured
+alternative type split a cost sum along its sums and products — explicit block
+decompositions instead of pair-set cardinalities — used by both objectives. -/
+theorem sum_rankedPairs_eq_sum_orient (r : LinearOrder A) (f : A → A → ℕ) :
+    ∑ p ∈ rankedPairs r, f p.1 p.2 = ∑ a, ∑ b, orient r f a b := by
+  letI := r.toDecidableLT
+  simp only [rankedPairs]
+  rw [sum_filter, Fintype.sum_prod_type]
+  refine Finset.sum_congr rfl fun a _ ↦ Finset.sum_congr rfl fun b _ ↦ ?_
+  dsimp only
+  by_cases h : r.lt a b
+  · rw [if_pos h, orient_of_lt f h]
+  · rw [if_neg h, orient_of_not_lt f h]
 
 /-- A single voter's distance to `r`, indexed by the pairs `r` ranks: the
 one-voter case of the decomposition, and the inductive step of its proof. -/

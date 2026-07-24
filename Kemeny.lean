@@ -18,6 +18,8 @@ import Kemeny.FromMaxCut.BudgetMatch
 import Kemeny.FromMaxCut.Program
 import Kemeny.FromMaxCut.Margins
 import Kemeny.FromMaxCut.MinTotal
+import Kemeny.FromMaxCut.Verdicts
+import Kemeny.FromMaxCut.Scan
 import Kemeny.FromMaxCut.Forward
 import Kemeny.FromMaxCut.Meta
 import Kemeny.FromMaxCut.Gadget

@@ -20,7 +20,8 @@ This file builds those lists and reads the two magnitudes off their lengths:
 * `candList` — a list of length exactly `N = 6nM + 2|E|`: the `6nM` vertex
   candidates (six letters × `n` gadgets × `M` members) as `6 × n × M`, appended
   to the `2|E|` edge candidates (two sides × `|E|` canonical edges) as
-  `2 × |E|`. `candNum = |candList|` is `N`.
+  `2 × |E|`. It is the emitted alternative set, and `N` never has to be
+  computed as a number — the Gauss sum of the budget indexes the list itself.
 
 Everything downstream — the candidate numbering, the ballots, and the Gauss
 sums in the budget — indexes these two lists.
@@ -138,13 +139,6 @@ theorem candList_length (x : GraphTy.denote) :
       = 6 * x.1.length * bigM x.1.length + 2 * (canonEdges.eval x).length := by
   rw [candList, append_eval, List.length_append, vertexCandList_length, edgeCandList_length]
 
-/-- `N` as a number: the length of `candList`. -/
-def candNum : Code GraphTy .nat := .comp candList .listLen
-
-theorem candNum_eval (x : GraphTy.denote) :
-    candNum.eval x = 6 * x.1.length * bigM x.1.length + 2 * (canonEdges.eval x).length :=
-  candList_length x
-
 /-! ## The budget
 
 The budget number is `kemenyBudget = minTotal + marginBudget`, and each summand
@@ -253,18 +247,10 @@ theorem marginBudgetCode_eval (x : GraphTy.denote) :
   rw [marginBudgetCode, subC_eval, add_eval, add_eval, threeNMsq_eval, pairSlackCode_eval,
     mul_eval, mul_eval, mNum_eval, kNum_eval, edgeBoundCode_eval]
 
-/-- The budget `kemenyBudget = minTotal + marginBudget`. -/
+/-- The budget `kemenyBudget = minTotal + marginBudget`. Its spec is the
+identification with the abstract budget, `budgetCode_eq` in the adequacy annex;
+the two summands' arithmetic forms above are what that proof consumes. -/
 def budgetCode : Code GraphTy .nat := Code.add minTotalCode marginBudgetCode
-
-theorem budgetCode_eval (x : GraphTy.denote) :
-    budgetCode.eval x =
-      ((∑ i ∈ Finset.range
-            (6 * x.1.length * bigM x.1.length + 2 * (canonEdges.eval x).length), i)
-          - 6 * x.1.length * ∑ i ∈ Finset.range (bigM x.1.length), i)
-        + (3 * x.1.length * bigM x.1.length ^ 2
-            + bigM x.1.length * ((canonEdges.eval x).map fun p ↦ 6 * (p.2 - p.1) + 3).sum
-            + (2 * (canonEdges.eval x).length) ^ 2 - bigM x.1.length * x.2.2) := by
-  rw [budgetCode, add_eval, minTotalCode_eval, marginBudgetCode_eval]
 
 end Cert
 end Hardness

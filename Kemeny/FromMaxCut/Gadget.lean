@@ -25,7 +25,7 @@ every use site an `isDefEq` through `wrongArcCost`'s unfolded `Finset.sum`
 framework is infeasible (the `Fintype` instance on the function space blows
 up both elaborator and kernel), so the check is phrased as a `Bool`-valued
 fold over `List.finRange` with a `List`-computable cost (`decide +kernel`
-evaluates it in under two minutes), and the two classification theorems
+reduces it in about twenty seconds), and the two classification theorems
 (`three_le_wrongArcCost`, `wrongArcCost_eq_three_cases`) recover the
 `Prop`-level statements by symbolic glue.
 -/
@@ -43,15 +43,6 @@ Since all within-gadget margins are ±1, this counts the arcs of the gadget
 tournament that `f` ranks against the majority. -/
 def wrongArcCost (f : Letter → ℕ) : ℕ :=
   ∑ x : Letter, ∑ x' : Letter, if f x < f x' then beats x' x - beats x x' else 0
-
-/-- Expanding a sum over the six letters. -/
-theorem sum_letter (h : Letter → ℕ) :
-    ∑ x : Letter, h x = h .A + h .B + h .C + h .D + h .E + h .F := by
-  rw [show (Finset.univ : Finset Letter) = {.A, .B, .C, .D, .E, .F} from by decide,
-    Finset.sum_insert (by decide), Finset.sum_insert (by decide),
-    Finset.sum_insert (by decide), Finset.sum_insert (by decide),
-    Finset.sum_insert (by decide), Finset.sum_singleton]
-  omega
 
 /-! ## The kernel-checkable form -/
 
@@ -99,7 +90,7 @@ private def checkAll : Bool :=
         checkOne a b c d e f
 
 /-- **The enumeration** — the paper's two-triangle-packings argument, as a
-kernel computation over the `6⁶` position tuples (~100s; the elaborator's
+kernel computation over the `6⁶` position tuples (~20s; the elaborator's
 evaluator cannot do it, hence `+kernel`). -/
 private theorem checkAll_true : checkAll = true := by decide +kernel
 

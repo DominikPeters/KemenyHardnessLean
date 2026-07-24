@@ -55,28 +55,22 @@ orientations of a pair gives the pair's cost, so summing over the full square
 gives the Kemeny cost (`kemenyCost_eq_sum_orientedCost`) — the index shape
 that makes membership splits painless. -/
 def orientedCost (voters : List (LinearOrder A)) (r : LinearOrder A) (a b : A) : ℕ :=
-  letI := r.toDecidableLT
-  if r.lt a b then againstCount voters a b else 0
+  orient r (againstCount voters) a b
 
 theorem orientedCost_of_lt {r : LinearOrder A} {a b : A} (voters : List (LinearOrder A))
-    (h : r.lt a b) : orientedCost voters r a b = againstCount voters a b := by
-  simp only [orientedCost]
-  rw [if_pos h]
+    (h : r.lt a b) : orientedCost voters r a b = againstCount voters a b :=
+  orient_of_lt _ h
 
 theorem orientedCost_of_not_lt {r : LinearOrder A} {a b : A} (voters : List (LinearOrder A))
-    (h : ¬r.lt a b) : orientedCost voters r a b = 0 := by
-  simp only [orientedCost]
-  rw [if_neg h]
+    (h : ¬r.lt a b) : orientedCost voters r a b = 0 :=
+  orient_of_not_lt _ h
 
 /-- Two rankings agreeing on an ordered pair pay the same oriented cost on
 it. -/
 theorem orientedCost_congr {r r' : LinearOrder A} {a b : A} (voters : List (LinearOrder A))
     (h : r.lt a b ↔ r'.lt a b) :
-    orientedCost voters r a b = orientedCost voters r' a b := by
-  by_cases hab : r.lt a b
-  · rw [orientedCost_of_lt voters hab, orientedCost_of_lt voters (h.mp hab)]
-  · rw [orientedCost_of_not_lt voters hab,
-      orientedCost_of_not_lt voters (fun hc ↦ hab (h.mpr hc))]
+    orientedCost voters r a b = orientedCost voters r' a b :=
+  orient_congr _ h
 
 section ContractedRanking
 
@@ -186,15 +180,8 @@ ordered pairs — the unranked orientation contributes zero, so nothing is
 double-counted. -/
 theorem kemenyCost_eq_sum_orientedCost (voters : List (LinearOrder A)) (r : LinearOrder A) :
     kemenyCost voters r = ∑ a, ∑ b, orientedCost voters r a b := by
-  letI := r.toDecidableLT
-  rw [kemenyCost_eq_sum_against]
-  simp only [rankedPairs]
-  rw [sum_filter, Fintype.sum_prod_type]
-  refine Finset.sum_congr rfl fun a _ ↦ Finset.sum_congr rfl fun b _ ↦ ?_
-  dsimp only
-  by_cases h : r.lt a b
-  · rw [if_pos h, orientedCost_of_lt voters h]
-  · rw [if_neg h, orientedCost_of_not_lt voters h]
+  rw [kemenyCost_eq_sum_against, sum_rankedPairs_eq_sum_orient]
+  rfl
 
 variable [DecidableEq A]
 

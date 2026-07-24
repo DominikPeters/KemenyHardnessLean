@@ -187,12 +187,5 @@ theorem kemenyCode_eval (x : GraphTy.denote) :
       then (candList.eval x, (profileBallots.eval x, budgetCode.eval x))
       else ([0, 1], ([[0, 1], [0, 1], [1, 0]], 0)) := rfl
 
-/-- The decoded NO instance: three ballots on two candidates, budget `0`. -/
-theorem decodeKemeny_noCode :
-    decodeKemeny ([0, 1], ([[0, 1], [0, 1], [1, 0]], 0))
-      = { A := Fin 2,
-          voters := [decodeBallot 2 [0, 1], decodeBallot 2 [0, 1], decodeBallot 2 [1, 0]],
-          b := 0 } := rfl
-
 end Cert
 end Hardness

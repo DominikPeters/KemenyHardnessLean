@@ -54,13 +54,8 @@ when the test and the emission agree along the encoding `g`, the two agree. -/
 theorem map_filter_map_comp (l : List α) (g : α → β) (T : β → Bool) (E : β → γ)
     (p : α → Bool) (f : α → γ) (hT : ∀ a, T (g a) = p a) (hE : ∀ a, E (g a) = f a) :
     ((l.map g).filter T).map E = (l.filter p).map f := by
-  induction l with
-  | nil => rfl
-  | cons a l ih =>
-    rw [List.map_cons, List.filter_cons, List.filter_cons, hT a]
-    by_cases h : p a = true
-    · rw [if_pos h, if_pos h, List.map_cons, List.map_cons, ih, hE a]
-    · rw [if_neg h, if_neg h, ih]
+  rw [map_filter_comm, List.map_map, show (fun a ↦ T (g a)) = p from funext hT,
+    show E ∘ g = f from funext hE]
 
 /-- The same across the keep-or-drop idiom emitting a *list* per survivor —
 voter 2's midpoint gap, where each edge contributes both its candidates. -/
@@ -105,19 +100,15 @@ with the abstract test or number. -/
 theorem eiEqU_num (u : Fin (decodeNumbered x).n) (e : DEdge x) :
     eiEqU.eval ((x, u.val), (toPair e, (edgePairEquiv x e).val))
       = edgeAt (fun e ↦ e.i) u e := by
-  have h : eiEqU.eval ((x, u.val), (toPair e, (edgePairEquiv x e).val))
-      = decide (e.i.val = u.val) := rfl
-  rw [h]
-  simp only [edgeAt, Fin.val_inj]
+  rw [Bool.eq_iff_iff, eiEqU_eval_true]
+  simp only [edgeAt, decide_eq_true_eq, ← Fin.val_inj, toPair]
 
 /-- The program's larger-endpoint test is the abstract filter `e.j = u`. -/
 theorem ejEqU_num (u : Fin (decodeNumbered x).n) (e : DEdge x) :
     ejEqU.eval ((x, u.val), (toPair e, (edgePairEquiv x e).val))
       = edgeAt (fun e ↦ e.j) u e := by
-  have h : ejEqU.eval ((x, u.val), (toPair e, (edgePairEquiv x e).val))
-      = decide (e.j.val = u.val) := rfl
-  rw [h]
-  simp only [edgeAt, Fin.val_inj]
+  rw [Bool.eq_iff_iff, ejEqU_eval_true]
+  simp only [edgeAt, decide_eq_true_eq, ← Fin.val_inj, toPair]
 
 /-- The program's bracketing midpoint test is the abstract filter `e.mid = u` —
 the one place the division-free encoding has to be undone. -/

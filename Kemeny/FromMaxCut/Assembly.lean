@@ -35,16 +35,6 @@ variable {n M : ℕ} {G : SimpleGraph (Fin n)}
 
 /-! ## Transferring oriented margins along comparison agreement -/
 
-/-- Two rankings agreeing on a pair have the same oriented margin there: the
-margin reads the ranking only through the pair's comparison. -/
-theorem orientedMargin_congr {A : Type*} {voters : List (LinearOrder A)}
-    {r r' : LinearOrder A} {a b : A} (h : r.lt a b ↔ r'.lt a b) :
-    orientedMargin voters r a b = orientedMargin voters r' a b := by
-  by_cases hlt : r.lt a b
-  · rw [orientedMargin_of_lt voters hlt, orientedMargin_of_lt voters (h.mp hlt)]
-  · rw [orientedMargin_of_not_lt voters hlt,
-      orientedMargin_of_not_lt voters fun hc ↦ hlt (h.mpr hc)]
-
 /-- The vertex–vertex block of a ranking whose vertex part agrees with the
 output spec is the output spec's vertex–vertex block: exactly `3nM²`. -/
 private theorem sum_orientedMargin_vv_eq {r : LinearOrder (Cand n M G)}

@@ -20,9 +20,10 @@ matching the program's output with `L.map num`. No position is ever computed:
 positions enter only through `List.idxOf`, and `idxOf_lt_iff_of_sorted` turns
 the comparison of positions in a sorted list back into the order itself.
 
-The remaining lemmas are the tools those two facts are proved with:
-`pairwise_segments` (a list of levelled segments, laid end to end in increasing
-level, is sorted as soon as each segment is), and the `idxOf`/`filter`/`map`
+The remaining lemmas are the list tools the ballot half of the adequacy proof
+runs on: `pairwise_segments` (a list of levelled segments, laid end to end in
+increasing level, is sorted as soon as each segment is), which proves the
+sortedness fact at both nesting levels, and the `idxOf`/`filter`/`map`
 commutations.
 -/
 
@@ -47,16 +48,6 @@ theorem map_filter_comm (f : α → β) (p : β → Bool) (l : List α) :
     · rw [if_neg h, if_neg h, ih]
 
 variable [DecidableEq α]
-
-/-- First-occurrence index is injective across members (no `Nodup` needed): at a
-shared first-occurrence position sit equal elements. The general form of
-`idxOf_inj_aux`. -/
-theorem idxOf_inj_mem {l : List α} {a b : α} (ha : a ∈ l) (hb : b ∈ l)
-    (h : l.idxOf a = l.idxOf b) : a = b := by
-  have e1 : l[l.idxOf a]'(List.idxOf_lt_length_of_mem ha) = a := List.getElem_idxOf _
-  have e2 : l[l.idxOf b]'(List.idxOf_lt_length_of_mem hb) = b := List.getElem_idxOf _
-  rw [← e1, ← e2]
-  simp [h]
 
 /-- Mapping by an injection does not move positions. -/
 theorem idxOf_map_of_injective {f : α → ℕ} (hf : Function.Injective f) (l : List α) (a : α) :

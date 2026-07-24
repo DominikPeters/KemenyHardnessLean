@@ -44,7 +44,7 @@ abbrev KemenyTy : Ty := .pair (.list .nat) (.pair (.list (.list .nat)) .nat)
 /-- First-occurrence index is injective across members: at a shared
 first-occurrence position sit equal elements (no `Nodup` needed — the
 `getElem`-at-`idxOf` returns the element itself). -/
-theorem idxOf_inj_aux {l : List ℕ} {a b : ℕ}
+theorem idxOf_inj_mem {α : Type*} [DecidableEq α] {l : List α} {a b : α}
     (ha : a ∈ l) (hb : b ∈ l) (h : l.idxOf a = l.idxOf b) : a = b := by
   have e1 : l[l.idxOf a]'(List.idxOf_lt_length_of_mem ha) = a := List.getElem_idxOf _
   have e2 : l[l.idxOf b]'(List.idxOf_lt_length_of_mem hb) = b := List.getElem_idxOf _
@@ -88,7 +88,7 @@ theorem decodeBallot_lt_of_perm {N : ℕ} {ballot : List ℕ}
   constructor
   · rintro (h | ⟨heq, hlt⟩)
     · exact h
-    · exact absurd (idxOf_inj_aux hma hmb heq) (Nat.ne_of_lt hlt)
+    · exact absurd (idxOf_inj_mem hma hmb heq) (Nat.ne_of_lt hlt)
   · exact fun h => Or.inl h
 
 /-- The ballot `[2, 0, 1]` ranks candidate `2` above candidate `0` (mentioned

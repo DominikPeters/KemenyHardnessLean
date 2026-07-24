@@ -3,7 +3,8 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
-import Kemeny.FromMaxCut.Margins
+import Kemeny.FromMaxCut.Scan
+import Kemeny.FromMaxCut.Verdicts
 
 /-!
 # The forward direction: a cheap ranking from a cut
@@ -29,6 +30,12 @@ the table's cost column. The blocks (`3nM²` exactly for vertex–vertex,
 `marginCost_out_add_cut_le` and the forward direction proper,
 `exists_marginCost_le_marginBudget`: a cut of size `k` yields a ranking
 within the margin budget.
+
+What the three voters say about a pair is not recomputed here: the counts come
+from the shared verdict engine (`Verdicts.lean`) — `beats` for two letters of a
+gadget, `edgeVerdict` and its seven region rows for a vertex–edge pair — and the
+interval bookkeeping from `Scan.lean`. The reverse direction reads the same
+lemmas, so the two directions agree by construction rather than by coincidence.
 -/
 
 namespace Hardness
@@ -79,57 +86,6 @@ section CostVV
 open Finset
 
 variable {M : ℕ}
-
-/-! ## Evaluating `againstCount` of the profile
-
-The profile has three voters, so every count is a sum of three one-voter
-verdicts (`againstCount_profile_eq`); each verdict is decided by the voter's
-comparison law. For two letters within one gadget, the count is the
-computable within-gadget tournament `beats`. -/
-
-/-- The profile count, voter by voter. -/
-theorem againstCount_profile_eq (c c' : Cand n M G) :
-    againstCount (kemenyProfile n G M) c c' =
-      againstCount [(spec1 n G).ranking M] c c'
-        + againstCount [(spec2 n G).ranking M] c c'
-        + againstCount [(spec3 n G).ranking M] c c' := by
-  rw [kemenyProfile, againstCount_cons ((spec1 n G).ranking M) _ c c',
-    againstCount_cons ((spec2 n G).ranking M) _ c c']
-  omega
-
-/-- How many of the three voters rank letter `x` above letter `y` within a
-gadget: the within-gadget tournament, as a computable count. All fifteen
-majority arcs of the paper's gadget figure are `beats x y = 2` facts. -/
-def beats (x y : Letter) : ℕ :=
-  (if pos1 x < pos1 y then 1 else 0) + (if pos2 x < pos2 y then 1 else 0)
-    + (if pos3 x < pos3 y then 1 else 0)
-
-/-- One voter's verdict on a same-gadget letter pair is its local-position
-comparison. -/
-theorem againstCount_singleton_letters (V : VoterSpec n G) {u : Fin n}
-    {x x' : Letter} {m m' : Fin M} (hne : V.localPos u x ≠ V.localPos u x') :
-    againstCount [V.ranking M] (Sum.inl (u, x, m)) (Sum.inl (u, x', m'))
-      = if V.localPos u x' < V.localPos u x then 1 else 0 := by
-  by_cases h : V.localPos u x' < V.localPos u x
-  · rw [if_pos h]
-    exact againstCount_singleton_of_gt
-      ((VoterSpec.lt_vertex_vertex V).mpr (Or.inr ⟨rfl, Or.inl h⟩))
-  · rw [if_neg h]
-    exact againstCount_singleton_of_lt
-      ((VoterSpec.lt_vertex_vertex V).mpr (Or.inr ⟨rfl, Or.inl (by omega)⟩))
-
-/-- The profile's count on a same-gadget letter pair is the tournament
-count — the same in every gadget. -/
-theorem againstCount_profile_letters {u : Fin n} {x x' : Letter} {m m' : Fin M}
-    (hne : x ≠ x') :
-    againstCount (kemenyProfile n G M) (Sum.inl (u, x, m)) (Sum.inl (u, x', m'))
-      = beats x' x := by
-  rw [againstCount_profile_eq,
-    againstCount_singleton_letters (spec1 n G) (fun h ↦ hne (pos1_inj h)),
-    againstCount_singleton_letters (spec2 n G) (fun h ↦ hne (pos2_inj h)),
-    againstCount_singleton_letters (spec3 n G) (fun h ↦ hne (pos3_inj h))]
-  simp only [spec1, spec2, spec3, beats]
-  rfl
 
 /-! ## The vertex–vertex block
 
@@ -295,148 +251,48 @@ variable {M : ℕ}
 /-! ## The vertex–edge and edge–vertex blocks
 
 Both orientations of a vertex–edge pair are handled together: the pair's
-two-way margin cost is `cnt − 1` if the output ranks the vertex candidate
-above the edge candidate and `2 − cnt` otherwise, where `cnt ∈ {1, 2}` is the
-profile count against the vertex-above-edge order (`orientedMargin_ve_add_swap`
-— the margins-±1 facts in the exact form the block computation sums). The
-verdicts of the three voters and of the output depend on the vertex candidate
+two-way margin cost is `verdict − 1` if the output ranks the vertex candidate
+above the edge candidate and `2 − verdict` otherwise
+(`orientedMargin_ve_add_swap`). The verdict depends on the vertex candidate
 only through its gadget `u` and letter `x`, never the member index — so each
 `(u, x)` contributes its verdict `M`-fold, and per edge candidate the block is
 `M` times a scan over `u`, piecewise constant on the seven ranges cut by the
-edge's endpoints and midpoint (`sum_fin_scan`). On each range the letter count
-is a `decide`. -/
+edge's endpoints and midpoint (`sum_fin_scan`).
 
-/-- One voter's verdict on a vertex–edge pair, as the comparison of the
-voter's positions: cost `0` exactly if the voter ranks the vertex candidate
-above the edge candidate. Public: the reverse direction's edge-cost engine
-reads the same verdicts. -/
-theorem againstCount_singleton_ve (V : VoterSpec n G) (e : EdgePair n G)
-    (s : Side) (u : Fin n) (x : Letter) (m : Fin M) :
-    againstCount [V.ranking M] (Sum.inl (u, x, m)) (Sum.inr (e, s))
-      = if V.gadgetPos u < V.gadgetPos (V.edgeGadget e s)
-            ∨ (V.gadgetPos u = V.gadgetPos (V.edgeGadget e s)
-              ∧ V.localPos u x ≤ V.localPos (V.edgeGadget e s) (V.gapLetter e s))
-        then 0 else 1 := by
-  by_cases h : V.gadgetPos u < V.gadgetPos (V.edgeGadget e s)
-      ∨ (V.gadgetPos u = V.gadgetPos (V.edgeGadget e s)
-        ∧ V.localPos u x ≤ V.localPos (V.edgeGadget e s) (V.gapLetter e s))
-  · rw [if_pos h]
-    exact againstCount_singleton_of_lt ((VoterSpec.lt_vertex_edge V).mpr h)
-  · rw [if_neg h]
-    exact againstCount_singleton_of_gt (ranks_of_not_ranks Sum.inl_ne_inr
-      fun hc ↦ h ((VoterSpec.lt_vertex_edge V).mp hc))
+Each of the six placement cases is therefore seven rows over the six letters,
+and only *one* of the seven is a real computation: the edge candidate's own
+gadget, where the placement table decides letter by letter. The other six lie
+wholly above or wholly below it (`sum_row_above`, `sum_row_below`), so their
+rows are the region verdicts of `Verdicts.lean` summed with no case analysis at
+all. -/
 
-/-- **The two-way margin cost of a vertex–edge pair**: `cnt − 1` when the
-output spec ranks the vertex candidate above the edge candidate, `2 − cnt`
-otherwise, `cnt` the profile count against vertex-above-edge. Both values are
-the disagreement indicator between the output and the 2-of-3 majority, by the
-margins-±1 facts. -/
-private theorem orientedMargin_ve_add_swap (hsp : SpreadEdges n G)
-    (W : VoterSpec n G) (e : EdgePair n G) (s : Side) (u : Fin n) (x : Letter)
-    (m : Fin M) :
-    orientedMargin (kemenyProfile n G M) (W.ranking M)
-        (Sum.inl (u, x, m)) (Sum.inr (e, s))
-      + orientedMargin (kemenyProfile n G M) (W.ranking M)
-        (Sum.inr (e, s)) (Sum.inl (u, x, m))
-      = if W.gadgetPos u < W.gadgetPos (W.edgeGadget e s)
-            ∨ (W.gadgetPos u = W.gadgetPos (W.edgeGadget e s)
-              ∧ W.localPos u x ≤ W.localPos (W.edgeGadget e s) (W.gapLetter e s))
-        then againstCount (kemenyProfile n G M) (Sum.inl (u, x, m)) (Sum.inr (e, s)) - 1
-        else 2 - againstCount (kemenyProfile n G M) (Sum.inl (u, x, m)) (Sum.inr (e, s)) := by
-  have hne : (Sum.inl (u, x, m) : Cand n M G) ≠ Sum.inr (e, s) := Sum.inl_ne_inr
-  have hns : ¬SameSuper (Sum.inl (u, x, m) : Cand n M G) (Sum.inr (e, s)) := by
-    rintro ⟨i, y, m1, m2, -, hc⟩
-    exact Sum.inr_ne_inl hc
-  have hns' : ¬SameSuper (Sum.inr (e, s) : Cand n M G) (Sum.inl (u, x, m)) := by
-    rintro ⟨i, y, m1, m2, hc, -⟩
-    exact Sum.inr_ne_inl hc
-  have hlow := one_le_againstCount_profile (M := M) hsp hne hns
-  have hlow' := one_le_againstCount_profile (M := M) hsp hne.symm hns'
-  have hsum := againstCount_add_againstCount (kemenyProfile n G M) hne
-  rw [kemenyProfile_length] at hsum
-  by_cases h : W.gadgetPos u < W.gadgetPos (W.edgeGadget e s)
-      ∨ (W.gadgetPos u = W.gadgetPos (W.edgeGadget e s)
-        ∧ W.localPos u x ≤ W.localPos (W.edgeGadget e s) (W.gapLetter e s))
-  · have hlt := (VoterSpec.lt_vertex_edge W (M := M) (m := m)).mpr h
-    rw [if_pos h, orientedMargin_of_lt _ hlt,
-      orientedMargin_of_not_lt _ (ranks_asymm hlt)]
-    omega
-  · have hlt : (W.ranking M).lt (Sum.inr (e, s)) (Sum.inl (u, x, m)) :=
-      ranks_of_not_ranks hne fun hc ↦ h ((VoterSpec.lt_vertex_edge W).mp hc)
-    rw [if_neg h, orientedMargin_of_not_lt _ (ranks_asymm hlt),
-      orientedMargin_of_lt _ hlt]
-    omega
+/-! ### The two shapes of letter row
 
-/-- **The seven-range scan**: a function on `Fin n` that vanishes before `iv`
-and after `jv` and is constant on the five remaining pieces sums to the
-telescoped value. The interval bookkeeping of the vertex–edge block, once and
-for all. -/
-private theorem sum_fin_scan {f : Fin n → ℕ} {iv qv jv : ℕ}
-    (a b c d g : ℕ) (hiq : iv < qv) (hqj : qv < jv) (hjn : jv < n)
-    (h0 : ∀ u : Fin n, u.val < iv → f u = 0)
-    (hI : ∀ u : Fin n, u.val = iv → f u = a)
-    (h1 : ∀ u : Fin n, iv < u.val → u.val < qv → f u = b)
-    (hQ : ∀ u : Fin n, u.val = qv → f u = c)
-    (h2 : ∀ u : Fin n, qv < u.val → u.val < jv → f u = d)
-    (hJ : ∀ u : Fin n, u.val = jv → f u = g)
-    (h3 : ∀ u : Fin n, jv < u.val → f u = 0) :
-    ∑ u : Fin n, f u = a + (qv - iv - 1) * b + c + (jv - qv - 1) * d + g := by
-  set F : ℕ → ℕ := fun uv ↦ if h : uv < n then f ⟨uv, h⟩ else 0 with hF
-  have hval : ∀ (uv : ℕ) (h : uv < n), F uv = f ⟨uv, h⟩ := by
-    intro uv h
-    rw [hF]
-    exact dif_pos h
-  have e0 : ∑ uv ∈ Finset.Ico 0 iv, F uv = 0 :=
-    Finset.sum_eq_zero fun uv huv ↦ by
-      rw [Finset.mem_Ico] at huv
-      rw [hval uv (by omega)]
-      exact h0 _ huv.2
-  have eI : ∑ uv ∈ Finset.Ico iv (iv + 1), F uv = a := by
-    rw [Nat.Ico_succ_singleton, Finset.sum_singleton, hval iv (by omega)]
-    exact hI _ rfl
-  have e1 : ∑ uv ∈ Finset.Ico (iv + 1) qv, F uv = (qv - (iv + 1)) * b := by
-    have hpt : ∀ uv ∈ Finset.Ico (iv + 1) qv, F uv = b := by
-      intro uv huv
-      rw [Finset.mem_Ico] at huv
-      rw [hval uv (by omega)]
-      have hlo : iv < uv := by omega
-      exact h1 _ hlo huv.2
-    rw [Finset.sum_congr rfl hpt, Finset.sum_const, Nat.card_Ico, smul_eq_mul]
-  have eQ : ∑ uv ∈ Finset.Ico qv (qv + 1), F uv = c := by
-    rw [Nat.Ico_succ_singleton, Finset.sum_singleton, hval qv (by omega)]
-    exact hQ _ rfl
-  have e2 : ∑ uv ∈ Finset.Ico (qv + 1) jv, F uv = (jv - (qv + 1)) * d := by
-    have hpt : ∀ uv ∈ Finset.Ico (qv + 1) jv, F uv = d := by
-      intro uv huv
-      rw [Finset.mem_Ico] at huv
-      rw [hval uv (by omega)]
-      have hlo : qv < uv := by omega
-      exact h2 _ hlo huv.2
-    rw [Finset.sum_congr rfl hpt, Finset.sum_const, Nat.card_Ico, smul_eq_mul]
-  have eJ : ∑ uv ∈ Finset.Ico jv (jv + 1), F uv = g := by
-    rw [Nat.Ico_succ_singleton, Finset.sum_singleton, hval jv hjn]
-    exact hJ _ rfl
-  have e3 : ∑ uv ∈ Finset.Ico (jv + 1) n, F uv = 0 :=
-    Finset.sum_eq_zero fun uv huv ↦ by
-      rw [Finset.mem_Ico] at huv
-      rw [hval uv huv.2]
-      have hlo : jv < uv := by omega
-      exact h3 _ hlo
-  calc ∑ u : Fin n, f u
-      = ∑ u : Fin n, F u.val := Finset.sum_congr rfl fun u _ ↦ (hval u.val u.isLt).symm
-    _ = ∑ uv ∈ Finset.range n, F uv := Fin.sum_univ_eq_sum_range F n
-    _ = ∑ uv ∈ Finset.Ico 0 n, F uv := by rw [Finset.range_eq_Ico]
-    _ = a + (qv - iv - 1) * b + c + (jv - qv - 1) * d + g := by
-        rw [← Finset.sum_Ico_consecutive F (Nat.zero_le iv) (by omega : iv ≤ n),
-          ← Finset.sum_Ico_consecutive F (by omega : iv ≤ iv + 1) (by omega : iv + 1 ≤ n),
-          ← Finset.sum_Ico_consecutive F (by omega : iv + 1 ≤ qv) (by omega : qv ≤ n),
-          ← Finset.sum_Ico_consecutive F (by omega : qv ≤ qv + 1) (by omega : qv + 1 ≤ n),
-          ← Finset.sum_Ico_consecutive F (by omega : qv + 1 ≤ jv) (by omega : jv ≤ n),
-          ← Finset.sum_Ico_consecutive F (by omega : jv ≤ jv + 1) (by omega : jv + 1 ≤ n),
-          e0, eI, e1, eQ, e2, eJ, e3,
-          show qv - (iv + 1) = qv - iv - 1 from by omega,
-          show jv - (qv + 1) = jv - qv - 1 from by omega]
-        ring
+Outside the gadget the edge candidate itself sits in, the output ranks a whole
+gadget on one side of it, so its letter row is the verdict row with no case
+analysis: `verdict − 1` per letter above, `2 − verdict` per letter below. Only
+the edge candidate's own gadget splits, and only there does a row see the
+placement table. -/
+
+/-- A gadget the output ranks entirely *above* the edge candidate. -/
+private theorem sum_row_above (W : VoterSpec n G) (e : EdgePair n G) (s : Side)
+    {u : Fin n} (hlt : W.gadgetPos u < W.gadgetPos (W.edgeGadget e s)) :
+    ∑ x : Letter, (if W.gadgetPos u < W.gadgetPos (W.edgeGadget e s)
+          ∨ (W.gadgetPos u = W.gadgetPos (W.edgeGadget e s)
+            ∧ W.localPos u x ≤ W.localPos (W.edgeGadget e s) (W.gapLetter e s))
+        then edgeVerdict e s u x - 1 else 2 - edgeVerdict e s u x)
+      = ∑ x : Letter, (edgeVerdict e s u x - 1) :=
+  Finset.sum_congr rfl fun _ _ ↦ if_pos (Or.inl hlt)
+
+/-- A gadget the output ranks entirely *below* the edge candidate. -/
+private theorem sum_row_below (W : VoterSpec n G) (e : EdgePair n G) (s : Side)
+    {u : Fin n} (hgt : W.gadgetPos (W.edgeGadget e s) < W.gadgetPos u) :
+    ∑ x : Letter, (if W.gadgetPos u < W.gadgetPos (W.edgeGadget e s)
+          ∨ (W.gadgetPos u = W.gadgetPos (W.edgeGadget e s)
+            ∧ W.localPos u x ≤ W.localPos (W.edgeGadget e s) (W.gapLetter e s))
+        then edgeVerdict e s u x - 1 else 2 - edgeVerdict e s u x)
+      = ∑ x : Letter, (2 - edgeVerdict e s u x) :=
+  Finset.sum_congr rfl fun _ _ ↦ if_neg (by rintro (h | ⟨h, -⟩) <;> omega)
 
 /-- **The `ℓ_e` scan**: against all vertex candidates, the left edge
 candidate costs exactly `M(3·span e + 2)` margin units in the output
@@ -455,199 +311,124 @@ private theorem sum_orientedMargin_out_ve_left (hsp : SpreadEdges n G)
   have hij := e.i_lt_j
   have hbq := e.mid.isLt
   have hbj := e.j.isLt
-  simp only [orientedMargin_ve_add_swap hsp (outSpec n G χ), againstCount_profile_eq,
-    againstCount_singleton_ve (spec1 n G), againstCount_singleton_ve (spec2 n G),
-    againstCount_singleton_ve (spec3 n G)]
-  simp only [spec1, spec2, spec3, outSpec, pos1, pos2, pos3]
+  simp only [orientedMargin_ve_add_swap hsp (outSpec n G χ), Finset.sum_const,
+    Finset.card_univ, Fintype.card_fin, smul_eq_mul, ← Finset.mul_sum]
   cases hb1 : χ e.i
   · cases hb2 : χ e.j
     · -- `R,R`: `ℓ_e` after `A_i` in the right gadget order `DAEBFC`
-      simp only [hb1, Bool.not_false, Bool.and_false, Bool.false_or,
-        Bool.false_eq_true, if_false, outPosR, Finset.sum_const,
-        Finset.card_univ, Fintype.card_fin, smul_eq_mul, ← Finset.mul_sum]
+      have hgad : (outSpec n G χ).edgeGadget e Side.left = e.i := by simp [outSpec, hb1, hb2]
+      simp only [Bool.false_or, Bool.false_eq_true, if_false]
       congr 1
       refine (sum_fin_scan 1 0 3 6 5 hiq hqj hbj ?_ ?_ ?_ ?_ ?_ ?_ ?_).trans ?_
       · intro u hu
-        have hbu := u.isLt
-        simp only [eq_true hu,
-          eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-          eq_true (show u.val < e.j.val from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.left (by rw [hgad]; exact hu)]
+        simp only [edgeVerdict_before_i hsp hu]
         decide
       · intro u hu
         obtain rfl : u = e.i := Fin.ext hu
-        simp only [hb1, Bool.false_eq_true, lt_self_iff_false, 
-          eq_false (show ¬(n - 1 - e.i.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - e.i.val = n - 1 - e.mid.val) from by omega),
-          eq_true hij, true_or, false_or, true_and, false_and, if_true, if_false]
+        simp only [edgeVerdict_at_i_left hsp, outSpec, hb1, hb2, Bool.not_false,
+          Bool.and_false, Bool.false_eq_true, if_false, lt_self_iff_false, false_or,
+          true_and, outPosR]
         decide
       · intro u hu1 hu2
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-          eq_true (show u.val < e.j.val from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.left (by rw [hgad]; exact hu1)]
+        simp only [edgeVerdict_mid1 hsp hu1 hu2]
         decide
       · intro u hu
         obtain rfl : u = e.mid := Fin.ext hu
-        simp only [lt_self_iff_false, 
-          eq_false (show ¬(e.mid.val < e.i.val) from by omega),
-          eq_false (show ¬(e.mid.val = e.i.val) from by omega),
-          eq_true hqj, true_or, false_or, true_and, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.left (by rw [hgad]; exact hiq)]
+        simp only [edgeVerdict_at_q hsp]
         decide
       · intro u hu1 hu2
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-          eq_true hu2, true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.left (by rw [hgad]; exact (show e.i.val < u.val by omega))]
+        simp only [edgeVerdict_mid2 hsp hu1 hu2]
         decide
       · intro u hu
         obtain rfl : u = e.j := Fin.ext hu
-        simp only [lt_self_iff_false, 
-          eq_false (show ¬(e.j.val < e.i.val) from by omega),
-          eq_false (show ¬(e.j.val = e.i.val) from by omega),
-          eq_true (show n - 1 - e.j.val < n - 1 - e.mid.val from by omega),
-          true_or, false_or, true_and, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.left (by rw [hgad]; exact hij)]
+        simp only [edgeVerdict_at_j_left hsp]
         decide
       · intro u hu
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-          eq_false (show ¬(u.val < e.j.val) from by omega),
-          eq_false (show ¬(u.val = e.j.val) from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.left (by rw [hgad]; exact (show e.i.val < u.val by omega))]
+        simp only [edgeVerdict_after_j hsp hu]
         decide
       · rw [EdgePair.span_def]
         omega
     · -- `R,L`: `ℓ_e` after `E_j` in the left gadget order `ABCDEF`
-      simp only [hb2, Bool.not_false, Bool.and_true, 
-        Bool.or_true, if_true, outPosL, Finset.sum_const,
-        Finset.card_univ, Fintype.card_fin, smul_eq_mul, ← Finset.mul_sum]
+      have hgad : (outSpec n G χ).edgeGadget e Side.left = e.j := by simp [outSpec, hb1, hb2]
+      simp only [Bool.false_or, if_true]
       congr 1
       refine (sum_fin_scan 5 6 3 0 0 hiq hqj hbj ?_ ?_ ?_ ?_ ?_ ?_ ?_).trans ?_
       · intro u hu
-        have hbu := u.isLt
-        simp only [eq_true hu,
-          eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-          eq_true (show u.val < e.j.val from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.left (by rw [hgad]; exact (show u.val < e.j.val by omega))]
+        simp only [edgeVerdict_before_i hsp hu]
         decide
       · intro u hu
         obtain rfl : u = e.i := Fin.ext hu
-        simp only [lt_self_iff_false, 
-          eq_false (show ¬(n - 1 - e.i.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - e.i.val = n - 1 - e.mid.val) from by omega),
-          eq_true hij, true_or, false_or, true_and, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.left (by rw [hgad]; exact hij)]
+        simp only [edgeVerdict_at_i_left hsp]
         decide
       · intro u hu1 hu2
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-          eq_true (show u.val < e.j.val from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.left (by rw [hgad]; exact (show u.val < e.j.val by omega))]
+        simp only [edgeVerdict_mid1 hsp hu1 hu2]
         decide
       · intro u hu
         obtain rfl : u = e.mid := Fin.ext hu
-        simp only [lt_self_iff_false, 
-          eq_false (show ¬(e.mid.val < e.i.val) from by omega),
-          eq_false (show ¬(e.mid.val = e.i.val) from by omega),
-          eq_true hqj, true_or, false_or, true_and, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.left (by rw [hgad]; exact hqj)]
+        simp only [edgeVerdict_at_q hsp]
         decide
       · intro u hu1 hu2
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-          eq_true hu2, true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.left (by rw [hgad]; exact hu2)]
+        simp only [edgeVerdict_mid2 hsp hu1 hu2]
         decide
       · intro u hu
         obtain rfl : u = e.j := Fin.ext hu
-        simp only [hb2, lt_self_iff_false, 
-          eq_false (show ¬(e.j.val < e.i.val) from by omega),
-          eq_false (show ¬(e.j.val = e.i.val) from by omega),
-          eq_true (show n - 1 - e.j.val < n - 1 - e.mid.val from by omega),
-          true_or, false_or, true_and, false_and, if_true, if_false]
+        simp only [edgeVerdict_at_j_left hsp, outSpec, hb1, hb2, Bool.not_false,
+          Bool.and_true, if_true, lt_self_iff_false, false_or, true_and, outPosL]
         decide
       · intro u hu
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-          eq_false (show ¬(u.val < e.j.val) from by omega),
-          eq_false (show ¬(u.val = e.j.val) from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.left (by rw [hgad]; exact hu)]
+        simp only [edgeVerdict_after_j hsp hu]
         decide
       · rw [EdgePair.span_def]
         omega
   · -- `χ e.i = true`: `ℓ_e` after `A_i` in the left gadget order, for either
     -- side of `e.j` — the two rows coincide
-    simp only [hb1, Bool.not_true, Bool.false_and, Bool.true_or, Bool.false_eq_true,
-      if_true, if_false, outPosL, Finset.sum_const,
-      Finset.card_univ, Fintype.card_fin, smul_eq_mul, ← Finset.mul_sum]
+    have hgad : (outSpec n G χ).edgeGadget e Side.left = e.i := by simp [outSpec, hb1]
+    simp only [Bool.true_or, if_true]
     congr 1
     refine (sum_fin_scan 0 0 3 6 5 hiq hqj hbj ?_ ?_ ?_ ?_ ?_ ?_ ?_).trans ?_
     · intro u hu
-      have hbu := u.isLt
-      simp only [eq_true hu,
-        eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-        eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-        eq_true (show u.val < e.j.val from by omega),
-        true_or, false_or, false_and, if_true, if_false]
+      rw [sum_row_above _ e Side.left (by rw [hgad]; exact hu)]
+      simp only [edgeVerdict_before_i hsp hu]
       decide
     · intro u hu
       obtain rfl : u = e.i := Fin.ext hu
-      simp only [hb1, lt_self_iff_false, 
-        eq_false (show ¬(n - 1 - e.i.val < n - 1 - e.mid.val) from by omega),
-        eq_false (show ¬(n - 1 - e.i.val = n - 1 - e.mid.val) from by omega),
-        eq_true hij, true_or, false_or, true_and, false_and, if_true, if_false]
+      simp only [edgeVerdict_at_i_left hsp, outSpec, hb1, Bool.not_true, Bool.false_and,
+        Bool.false_eq_true, if_false, if_true, lt_self_iff_false, false_or, true_and,
+        outPosL]
       decide
     · intro u hu1 hu2
-      have hbu := u.isLt
-      simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-        eq_false (show ¬(u.val = e.i.val) from by omega),
-        eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-        eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-        eq_true (show u.val < e.j.val from by omega),
-        true_or, false_or, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.left (by rw [hgad]; exact hu1)]
+      simp only [edgeVerdict_mid1 hsp hu1 hu2]
       decide
     · intro u hu
       obtain rfl : u = e.mid := Fin.ext hu
-      simp only [lt_self_iff_false, 
-        eq_false (show ¬(e.mid.val < e.i.val) from by omega),
-        eq_false (show ¬(e.mid.val = e.i.val) from by omega),
-        eq_true hqj, true_or, false_or, true_and, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.left (by rw [hgad]; exact hiq)]
+      simp only [edgeVerdict_at_q hsp]
       decide
     · intro u hu1 hu2
-      have hbu := u.isLt
-      simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-        eq_false (show ¬(u.val = e.i.val) from by omega),
-        eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-        eq_true hu2, true_or, false_or, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.left (by rw [hgad]; exact (show e.i.val < u.val by omega))]
+      simp only [edgeVerdict_mid2 hsp hu1 hu2]
       decide
     · intro u hu
       obtain rfl : u = e.j := Fin.ext hu
-      simp only [lt_self_iff_false, 
-        eq_false (show ¬(e.j.val < e.i.val) from by omega),
-        eq_false (show ¬(e.j.val = e.i.val) from by omega),
-        eq_true (show n - 1 - e.j.val < n - 1 - e.mid.val from by omega),
-        true_or, false_or, true_and, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.left (by rw [hgad]; exact hij)]
+      simp only [edgeVerdict_at_j_left hsp]
       decide
     · intro u hu
-      have hbu := u.isLt
-      simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-        eq_false (show ¬(u.val = e.i.val) from by omega),
-        eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-        eq_false (show ¬(u.val < e.j.val) from by omega),
-        eq_false (show ¬(u.val = e.j.val) from by omega),
-        true_or, false_or, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.left (by rw [hgad]; exact (show e.i.val < u.val by omega))]
+      simp only [edgeVerdict_after_j hsp hu]
       decide
     · rw [EdgePair.span_def]
       omega
@@ -668,199 +449,124 @@ private theorem sum_orientedMargin_out_ve_right (hsp : SpreadEdges n G)
   have hij := e.i_lt_j
   have hbq := e.mid.isLt
   have hbj := e.j.isLt
-  simp only [orientedMargin_ve_add_swap hsp (outSpec n G χ), againstCount_profile_eq,
-    againstCount_singleton_ve (spec1 n G), againstCount_singleton_ve (spec2 n G),
-    againstCount_singleton_ve (spec3 n G)]
-  simp only [spec1, spec2, spec3, outSpec, pos1, pos2, pos3]
+  simp only [orientedMargin_ve_add_swap hsp (outSpec n G χ), Finset.sum_const,
+    Finset.card_univ, Fintype.card_fin, smul_eq_mul, ← Finset.mul_sum]
   cases hb1 : χ e.i
   · -- `χ e.i = false`: `r_e` after `F_i` in the right gadget order, for
     -- either side of `e.j` — the two rows coincide
-    simp only [hb1, Bool.false_and, Bool.false_eq_true, if_false, outPosR,
-      Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul,
-      ← Finset.mul_sum]
+    have hgad : (outSpec n G χ).edgeGadget e Side.right = e.i := by simp [outSpec, hb1]
+    simp only [Bool.false_and, Bool.false_eq_true, if_false]
     congr 1
     refine (sum_fin_scan 1 0 3 6 2 hiq hqj hbj ?_ ?_ ?_ ?_ ?_ ?_ ?_).trans ?_
     · intro u hu
-      have hbu := u.isLt
-      simp only [eq_true hu,
-        eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-        eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-        eq_true (show u.val < e.j.val from by omega),
-        true_or, false_or, false_and, if_true, if_false]
+      rw [sum_row_above _ e Side.right (by rw [hgad]; exact hu)]
+      simp only [edgeVerdict_before_i hsp hu]
       decide
     · intro u hu
       obtain rfl : u = e.i := Fin.ext hu
-      simp only [hb1, Bool.false_eq_true, lt_self_iff_false, 
-        eq_false (show ¬(n - 1 - e.i.val < n - 1 - e.mid.val) from by omega),
-        eq_false (show ¬(n - 1 - e.i.val = n - 1 - e.mid.val) from by omega),
-        eq_true hij, true_or, false_or, true_and, false_and, if_true, if_false]
+      simp only [edgeVerdict_at_i_right hsp, outSpec, hb1, Bool.false_and,
+        Bool.false_eq_true, if_false, lt_self_iff_false, false_or, true_and, outPosR]
       decide
     · intro u hu1 hu2
-      have hbu := u.isLt
-      simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-        eq_false (show ¬(u.val = e.i.val) from by omega),
-        eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-        eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-        eq_true (show u.val < e.j.val from by omega),
-        true_or, false_or, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.right (by rw [hgad]; exact hu1)]
+      simp only [edgeVerdict_mid1 hsp hu1 hu2]
       decide
     · intro u hu
       obtain rfl : u = e.mid := Fin.ext hu
-      simp only [lt_self_iff_false, 
-        eq_false (show ¬(e.mid.val < e.i.val) from by omega),
-        eq_false (show ¬(e.mid.val = e.i.val) from by omega),
-        eq_true hqj, true_or, false_or, true_and, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.right (by rw [hgad]; exact hiq)]
+      simp only [edgeVerdict_at_q hsp]
       decide
     · intro u hu1 hu2
-      have hbu := u.isLt
-      simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-        eq_false (show ¬(u.val = e.i.val) from by omega),
-        eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-        eq_true hu2, true_or, false_or, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.right (by rw [hgad]; exact (show e.i.val < u.val by omega))]
+      simp only [edgeVerdict_mid2 hsp hu1 hu2]
       decide
     · intro u hu
       obtain rfl : u = e.j := Fin.ext hu
-      simp only [lt_self_iff_false, 
-        eq_false (show ¬(e.j.val < e.i.val) from by omega),
-        eq_false (show ¬(e.j.val = e.i.val) from by omega),
-        eq_true (show n - 1 - e.j.val < n - 1 - e.mid.val from by omega),
-        true_or, false_or, true_and, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.right (by rw [hgad]; exact hij)]
+      simp only [edgeVerdict_at_j_right hsp]
       decide
     · intro u hu
-      have hbu := u.isLt
-      simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-        eq_false (show ¬(u.val = e.i.val) from by omega),
-        eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-        eq_false (show ¬(u.val < e.j.val) from by omega),
-        eq_false (show ¬(u.val = e.j.val) from by omega),
-        true_or, false_or, false_and, if_true, if_false]
+      rw [sum_row_below _ e Side.right (by rw [hgad]; exact (show e.i.val < u.val by omega))]
+      simp only [edgeVerdict_after_j hsp hu]
       decide
     · rw [EdgePair.span_def]
       omega
   · cases hb2 : χ e.j
     · -- `L,R`: `r_e` after `D_j` in the right gadget order `DAEBFC`
-      simp only [hb2, Bool.not_false, Bool.true_and, Bool.false_eq_true,
-        if_true, if_false, outPosR, Finset.sum_const,
-        Finset.card_univ, Fintype.card_fin, smul_eq_mul, ← Finset.mul_sum]
+      have hgad : (outSpec n G χ).edgeGadget e Side.right = e.j := by simp [outSpec, hb1, hb2]
+      simp only [Bool.true_and, Bool.false_eq_true, if_false]
       congr 1
       refine (sum_fin_scan 2 6 3 0 1 hiq hqj hbj ?_ ?_ ?_ ?_ ?_ ?_ ?_).trans ?_
       · intro u hu
-        have hbu := u.isLt
-        simp only [eq_true hu,
-          eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-          eq_true (show u.val < e.j.val from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.right (by rw [hgad]; exact (show u.val < e.j.val by omega))]
+        simp only [edgeVerdict_before_i hsp hu]
         decide
       · intro u hu
         obtain rfl : u = e.i := Fin.ext hu
-        simp only [lt_self_iff_false, 
-          eq_false (show ¬(n - 1 - e.i.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - e.i.val = n - 1 - e.mid.val) from by omega),
-          eq_true hij, true_or, false_or, true_and, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.right (by rw [hgad]; exact hij)]
+        simp only [edgeVerdict_at_i_right hsp]
         decide
       · intro u hu1 hu2
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-          eq_true (show u.val < e.j.val from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.right (by rw [hgad]; exact (show u.val < e.j.val by omega))]
+        simp only [edgeVerdict_mid1 hsp hu1 hu2]
         decide
       · intro u hu
         obtain rfl : u = e.mid := Fin.ext hu
-        simp only [lt_self_iff_false, 
-          eq_false (show ¬(e.mid.val < e.i.val) from by omega),
-          eq_false (show ¬(e.mid.val = e.i.val) from by omega),
-          eq_true hqj, true_or, false_or, true_and, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.right (by rw [hgad]; exact hqj)]
+        simp only [edgeVerdict_at_q hsp]
         decide
       · intro u hu1 hu2
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-          eq_true hu2, true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.right (by rw [hgad]; exact hu2)]
+        simp only [edgeVerdict_mid2 hsp hu1 hu2]
         decide
       · intro u hu
         obtain rfl : u = e.j := Fin.ext hu
-        simp only [hb2, Bool.false_eq_true, lt_self_iff_false, 
-          eq_false (show ¬(e.j.val < e.i.val) from by omega),
-          eq_false (show ¬(e.j.val = e.i.val) from by omega),
-          eq_true (show n - 1 - e.j.val < n - 1 - e.mid.val from by omega),
-          true_or, false_or, true_and, false_and, if_true, if_false]
+        simp only [edgeVerdict_at_j_right hsp, outSpec, hb1, hb2, Bool.not_false,
+          Bool.and_true, if_true, Bool.false_eq_true, if_false, lt_self_iff_false,
+          false_or, true_and, outPosR]
         decide
       · intro u hu
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-          eq_false (show ¬(u.val < e.j.val) from by omega),
-          eq_false (show ¬(u.val = e.j.val) from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.right (by rw [hgad]; exact hu)]
+        simp only [edgeVerdict_after_j hsp hu]
         decide
       · rw [EdgePair.span_def]
         omega
     · -- `L,L`: `r_e` after `B_i` in the left gadget order `ABCDEF`
-      simp only [hb1, Bool.not_true, Bool.true_and, Bool.false_eq_true,
-        if_true, if_false, outPosL, Finset.sum_const,
-        Finset.card_univ, Fintype.card_fin, smul_eq_mul, ← Finset.mul_sum]
+      have hgad : (outSpec n G χ).edgeGadget e Side.right = e.i := by simp [outSpec, hb1, hb2]
+      simp only [Bool.true_and, if_true]
       congr 1
       refine (sum_fin_scan 2 0 3 6 2 hiq hqj hbj ?_ ?_ ?_ ?_ ?_ ?_ ?_).trans ?_
       · intro u hu
-        have hbu := u.isLt
-        simp only [eq_true hu,
-          eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-          eq_true (show u.val < e.j.val from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_above _ e Side.right (by rw [hgad]; exact hu)]
+        simp only [edgeVerdict_before_i hsp hu]
         decide
       · intro u hu
         obtain rfl : u = e.i := Fin.ext hu
-        simp only [hb1, lt_self_iff_false, 
-          eq_false (show ¬(n - 1 - e.i.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - e.i.val = n - 1 - e.mid.val) from by omega),
-          eq_true hij, true_or, false_or, true_and, false_and, if_true, if_false]
+        simp only [edgeVerdict_at_i_right hsp, outSpec, hb1, hb2, Bool.not_true,
+          Bool.and_false, Bool.false_eq_true, if_false, if_true, lt_self_iff_false,
+          false_or, true_and, outPosL]
         decide
       · intro u hu1 hu2
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-          eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-          eq_true (show u.val < e.j.val from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.right (by rw [hgad]; exact hu1)]
+        simp only [edgeVerdict_mid1 hsp hu1 hu2]
         decide
       · intro u hu
         obtain rfl : u = e.mid := Fin.ext hu
-        simp only [lt_self_iff_false, 
-          eq_false (show ¬(e.mid.val < e.i.val) from by omega),
-          eq_false (show ¬(e.mid.val = e.i.val) from by omega),
-          eq_true hqj, true_or, false_or, true_and, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.right (by rw [hgad]; exact hiq)]
+        simp only [edgeVerdict_at_q hsp]
         decide
       · intro u hu1 hu2
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-          eq_true hu2, true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.right (by rw [hgad]; exact (show e.i.val < u.val by omega))]
+        simp only [edgeVerdict_mid2 hsp hu1 hu2]
         decide
       · intro u hu
         obtain rfl : u = e.j := Fin.ext hu
-        simp only [lt_self_iff_false, 
-          eq_false (show ¬(e.j.val < e.i.val) from by omega),
-          eq_false (show ¬(e.j.val = e.i.val) from by omega),
-          eq_true (show n - 1 - e.j.val < n - 1 - e.mid.val from by omega),
-          true_or, false_or, true_and, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.right (by rw [hgad]; exact hij)]
+        simp only [edgeVerdict_at_j_right hsp]
         decide
       · intro u hu
-        have hbu := u.isLt
-        simp only [eq_false (show ¬(u.val < e.i.val) from by omega),
-          eq_false (show ¬(u.val = e.i.val) from by omega),
-          eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-          eq_false (show ¬(u.val < e.j.val) from by omega),
-          eq_false (show ¬(u.val = e.j.val) from by omega),
-          true_or, false_or, false_and, if_true, if_false]
+        rw [sum_row_below _ e Side.right (by rw [hgad]; exact (show e.i.val < u.val by omega))]
+        simp only [edgeVerdict_after_j hsp hu]
         decide
       · rw [EdgePair.span_def]
         omega

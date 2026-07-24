@@ -99,46 +99,41 @@ def marginCost (voters : List (LinearOrder A)) (r : LinearOrder A) : ℕ :=
 
 /-! ## The margin cost as a sum over the ordered square
 
-The index form consumed by cost computations: summing over *all* ordered
-pairs, with the unranked orientation contributing `0`, lets a structured
-alternative type split the sum along its sums and products — explicit block
-decompositions instead of pair-set cardinalities. -/
+The index form consumed by cost computations, an instance of the generic
+`orient` of `Rankings.lean`. -/
 
 omit [Fintype A] in
 /-- The margin cost of one ordered pair: the (truncated) margin paid if `r`
 ranks `a` above `b`, else `0`. -/
 def orientedMargin (voters : List (LinearOrder A)) (r : LinearOrder A) (a b : A) : ℕ :=
-  letI := r.toDecidableLT
-  if r.lt a b then againstCount voters a b - againstCount voters b a else 0
+  orient r (fun a b ↦ againstCount voters a b - againstCount voters b a) a b
 
 omit [Fintype A] in
 theorem orientedMargin_of_lt {r : LinearOrder A} {a b : A}
     (voters : List (LinearOrder A)) (h : r.lt a b) :
     orientedMargin voters r a b
-      = againstCount voters a b - againstCount voters b a := by
-  letI := r.toDecidableLT
-  rw [orientedMargin, if_pos h]
+      = againstCount voters a b - againstCount voters b a :=
+  orient_of_lt _ h
 
 omit [Fintype A] in
 theorem orientedMargin_of_not_lt {r : LinearOrder A} {a b : A}
     (voters : List (LinearOrder A)) (h : ¬r.lt a b) :
-    orientedMargin voters r a b = 0 := by
-  letI := r.toDecidableLT
-  rw [orientedMargin, if_neg h]
+    orientedMargin voters r a b = 0 :=
+  orient_of_not_lt _ h
+
+omit [Fintype A] in
+/-- Two rankings agreeing on an ordered pair pay the same margin on it. -/
+theorem orientedMargin_congr {voters : List (LinearOrder A)}
+    {r r' : LinearOrder A} {a b : A} (h : r.lt a b ↔ r'.lt a b) :
+    orientedMargin voters r a b = orientedMargin voters r' a b :=
+  orient_congr _ h
 
 /-- `marginCost` as a double sum over the full ordered square. -/
 theorem marginCost_eq_sum_orientedMargin (voters : List (LinearOrder A))
     (r : LinearOrder A) :
-    marginCost voters r = ∑ a, ∑ b, orientedMargin voters r a b := by
-  letI := r.toDecidableLT
-  rw [marginCost]
-  simp only [rankedPairs]
-  rw [sum_filter, Fintype.sum_prod_type]
-  refine Finset.sum_congr rfl fun a _ ↦ Finset.sum_congr rfl fun b _ ↦ ?_
-  dsimp only
-  by_cases h : r.lt a b
-  · rw [if_pos h, orientedMargin_of_lt voters h]
-  · rw [if_neg h, orientedMargin_of_not_lt voters h]
+    marginCost voters r = ∑ a, ∑ b, orientedMargin voters r a b :=
+  sum_rankedPairs_eq_sum_orient r
+    fun a b ↦ againstCount voters a b - againstCount voters b a
 
 /-! ## The affine bridge -/
 

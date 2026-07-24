@@ -11,10 +11,11 @@ verdict-`1` supers below it. This file bounds that cut sum from below for
 *every* cut position — the formal counterpart of walking the edge candidate
 through the output chain.
 
-The majority verdicts are evaluated region by region on the seven ranges cut
-by the edge's endpoints and midpoint (`edgeVerdict_mid1`, …; the two outer
-ranges are never needed — every case drops them). The cut sum is then bounded
-by a seven-range scan (`sum_fin_scan_ge`): landmark gadgets and the one
+The majority verdicts come region by region from the shared verdict engine
+(`Verdicts.lean`: `edgeVerdict_mid1`, …), the same rows the forward direction's
+exact scans read; here the two outer ranges are never needed, because every
+case drops them. The cut sum is then bounded by a seven-range scan
+(`sum_fin_scan_ge`, `Scan.lean`): landmark gadgets and the one
 relevant inner range contribute their exact rows (`w_q_below`, …), the rest
 is dropped, and the gadget the cut splits contributes a partial term checked
 by `decide` over the five interior cut positions (`w_i_left_partial`, …).
@@ -36,109 +37,6 @@ namespace Hardness
 open Finset
 
 variable {n M : ℕ} {G : SimpleGraph (Fin n)}
-
-/-! ## The verdicts, region by region
-
-Closed evaluations of `edgeVerdict` as functions of the letter alone, per
-range of the gadget relative to the edge's endpoints `i < q < j`. Gap letters
-matter only at the landmark the voter places the candidate in, so the two
-inner ranges and the midpoint are side-generic. -/
-
-private theorem edgeVerdict_mid1 {e : EdgePair n G} (hsp : SpreadEdges n G)
-    {u : Fin n} (h1 : e.i.val < u.val) (h2 : u.val < e.mid.val) (s : Side)
-    (x : Letter) : edgeVerdict e s u x = 2 := by
-  obtain ⟨hiq, hqj, -⟩ := hsp e
-  have hun := u.isLt
-  have hqn := e.mid.isLt
-  simp only [edgeVerdict, specMiss, spec1, spec2, spec3,
-    eq_false (show ¬(u.val < e.i.val) from by omega),
-    eq_false (show ¬(u.val = e.i.val) from by omega),
-    eq_false (show ¬(n - 1 - u.val < n - 1 - e.mid.val) from by omega),
-    eq_false (show ¬(n - 1 - u.val = n - 1 - e.mid.val) from by omega),
-    eq_true (show u.val < e.j.val from by omega),
-    true_or, false_or, false_and, if_true, if_false]
-
-private theorem edgeVerdict_at_q {e : EdgePair n G} (hsp : SpreadEdges n G)
-    (s : Side) (x : Letter) :
-    edgeVerdict e s e.mid x = if x = .B ∨ x = .D ∨ x = .F then 1 else 2 := by
-  obtain ⟨hiq, hqj, -⟩ := hsp e
-  have hqn := e.mid.isLt
-  simp only [edgeVerdict, specMiss, spec1, spec2, spec3,
-    eq_false (show ¬(e.mid.val < e.i.val) from by omega),
-    eq_false (show ¬(e.mid.val = e.i.val) from by omega),
-    eq_false (show ¬(n - 1 - e.mid.val < n - 1 - e.mid.val) from by omega),
-    eq_true hqj,
-    true_or, false_or, false_and, if_true, if_false]
-  cases x <;> decide
-
-private theorem edgeVerdict_mid2 {e : EdgePair n G} (hsp : SpreadEdges n G)
-    {u : Fin n} (h1 : e.mid.val < u.val) (h2 : u.val < e.j.val) (s : Side)
-    (x : Letter) : edgeVerdict e s u x = 1 := by
-  obtain ⟨hiq, hqj, -⟩ := hsp e
-  have hun := u.isLt
-  have hqn := e.mid.isLt
-  simp only [edgeVerdict, specMiss, spec1, spec2, spec3,
-    eq_false (show ¬(u.val < e.i.val) from by omega),
-    eq_false (show ¬(u.val = e.i.val) from by omega),
-    eq_true (show n - 1 - u.val < n - 1 - e.mid.val from by omega),
-    eq_true h2,
-    true_or, false_or, false_and, if_true, if_false]
-
-private theorem edgeVerdict_at_i_left {e : EdgePair n G} (hsp : SpreadEdges n G)
-    (x : Letter) :
-    edgeVerdict e Side.left e.i x = if x = .A then 1 else 2 := by
-  obtain ⟨hiq, hqj, -⟩ := hsp e
-  have hin := e.i.isLt
-  have hqn := e.mid.isLt
-  simp only [edgeVerdict, specMiss, spec1, spec2, spec3,
-    eq_false (show ¬(e.i.val < e.i.val) from by omega),
-    eq_false (show ¬(n - 1 - e.i.val < n - 1 - e.mid.val) from by omega),
-    eq_false (show ¬(n - 1 - e.i.val = n - 1 - e.mid.val) from by omega),
-    eq_true (show e.i.val < e.j.val from by omega),
-    true_or, false_or, false_and, if_true, if_false]
-  cases x <;> decide
-
-private theorem edgeVerdict_at_i_right {e : EdgePair n G} (hsp : SpreadEdges n G)
-    (x : Letter) :
-    edgeVerdict e Side.right e.i x = if x = .C ∨ x = .D then 2 else 1 := by
-  obtain ⟨hiq, hqj, -⟩ := hsp e
-  have hin := e.i.isLt
-  have hqn := e.mid.isLt
-  simp only [edgeVerdict, specMiss, spec1, spec2, spec3,
-    eq_false (show ¬(e.i.val < e.i.val) from by omega),
-    eq_false (show ¬(n - 1 - e.i.val < n - 1 - e.mid.val) from by omega),
-    eq_false (show ¬(n - 1 - e.i.val = n - 1 - e.mid.val) from by omega),
-    eq_true (show e.i.val < e.j.val from by omega),
-    true_or, false_or, false_and, if_true, if_false]
-  cases x <;> decide
-
-private theorem edgeVerdict_at_j_left {e : EdgePair n G} (hsp : SpreadEdges n G)
-    (x : Letter) :
-    edgeVerdict e Side.left e.j x = if x = .F then 2 else 1 := by
-  obtain ⟨hiq, hqj, -⟩ := hsp e
-  have hjn := e.j.isLt
-  have hqn := e.mid.isLt
-  simp only [edgeVerdict, specMiss, spec1, spec2, spec3,
-    eq_false (show ¬(e.j.val < e.i.val) from by omega),
-    eq_false (show ¬(e.j.val = e.i.val) from by omega),
-    eq_true (show n - 1 - e.j.val < n - 1 - e.mid.val from by omega),
-    eq_false (show ¬(e.j.val < e.j.val) from by omega),
-    true_or, false_or, false_and, if_true, if_false]
-  cases x <;> decide
-
-private theorem edgeVerdict_at_j_right {e : EdgePair n G} (hsp : SpreadEdges n G)
-    (x : Letter) :
-    edgeVerdict e Side.right e.j x = if x = .C ∨ x = .D then 1 else 2 := by
-  obtain ⟨hiq, hqj, -⟩ := hsp e
-  have hjn := e.j.isLt
-  have hqn := e.mid.isLt
-  simp only [edgeVerdict, specMiss, spec1, spec2, spec3,
-    eq_false (show ¬(e.j.val < e.i.val) from by omega),
-    eq_false (show ¬(e.j.val = e.i.val) from by omega),
-    eq_true (show n - 1 - e.j.val < n - 1 - e.mid.val from by omega),
-    eq_false (show ¬(e.j.val < e.j.val) from by omega),
-    true_or, false_or, false_and, if_true, if_false]
-  cases x <;> decide
 
 /-! ## Stripping the cut condition on unsplit gadgets -/
 
@@ -342,74 +240,6 @@ private theorem w_j_right_partial {e : EdgePair n G} (hsp : SpreadEdges n G)
     interval_cases c <;> decide
   · simp only [if_true]
     interval_cases c <;> decide
-
-/-! ## The seven-range lower-bound scan -/
-
-/-- **The seven-range lower-bound scan**: a sum over `Fin n` dominates the
-landmark values at `iv`, `qv`, `jv` plus constants on the two inner ranges;
-the outer ranges are dropped. The interval bookkeeping of the walk bounds,
-once and for all. -/
-private theorem sum_fin_scan_ge {f : Fin n → ℕ} {iv qv jv : ℕ}
-    (a b c d g : ℕ) (hiq : iv < qv) (hqj : qv < jv) (hjn : jv < n)
-    (hI : ∀ u : Fin n, u.val = iv → a ≤ f u)
-    (h1 : ∀ u : Fin n, iv < u.val → u.val < qv → b ≤ f u)
-    (hQ : ∀ u : Fin n, u.val = qv → c ≤ f u)
-    (h2 : ∀ u : Fin n, qv < u.val → u.val < jv → d ≤ f u)
-    (hJ : ∀ u : Fin n, u.val = jv → g ≤ f u) :
-    a + (qv - (iv + 1)) * b + c + (jv - (qv + 1)) * d + g ≤ ∑ u : Fin n, f u := by
-  set F : ℕ → ℕ := fun uv ↦ if h : uv < n then f ⟨uv, h⟩ else 0 with hF
-  have hval : ∀ (uv : ℕ) (h : uv < n), F uv = f ⟨uv, h⟩ := by
-    intro uv h
-    rw [hF]
-    exact dif_pos h
-  have eI : a ≤ ∑ uv ∈ Finset.Ico iv (iv + 1), F uv := by
-    rw [Nat.Ico_succ_singleton, Finset.sum_singleton, hval iv (by omega)]
-    exact hI _ rfl
-  have e1 : (qv - (iv + 1)) * b ≤ ∑ uv ∈ Finset.Ico (iv + 1) qv, F uv := by
-    calc (qv - (iv + 1)) * b = ∑ _uv ∈ Finset.Ico (iv + 1) qv, b := by
-          rw [Finset.sum_const, Nat.card_Ico, smul_eq_mul]
-      _ ≤ ∑ uv ∈ Finset.Ico (iv + 1) qv, F uv :=
-          Finset.sum_le_sum fun uv huv ↦ by
-            rw [Finset.mem_Ico] at huv
-            rw [hval uv (by omega)]
-            exact h1 _ (show iv < uv from by omega) huv.2
-  have eQ : c ≤ ∑ uv ∈ Finset.Ico qv (qv + 1), F uv := by
-    rw [Nat.Ico_succ_singleton, Finset.sum_singleton, hval qv (by omega)]
-    exact hQ _ rfl
-  have e2 : (jv - (qv + 1)) * d ≤ ∑ uv ∈ Finset.Ico (qv + 1) jv, F uv := by
-    calc (jv - (qv + 1)) * d = ∑ _uv ∈ Finset.Ico (qv + 1) jv, d := by
-          rw [Finset.sum_const, Nat.card_Ico, smul_eq_mul]
-      _ ≤ ∑ uv ∈ Finset.Ico (qv + 1) jv, F uv :=
-          Finset.sum_le_sum fun uv huv ↦ by
-            rw [Finset.mem_Ico] at huv
-            rw [hval uv (by omega)]
-            exact h2 _ (show qv < uv from by omega) huv.2
-  have eJ : g ≤ ∑ uv ∈ Finset.Ico jv (jv + 1), F uv := by
-    rw [Nat.Ico_succ_singleton, Finset.sum_singleton, hval jv hjn]
-    exact hJ _ rfl
-  have hsplit : ∑ uv ∈ Finset.Ico 0 iv, F uv + ∑ uv ∈ Finset.Ico iv (iv + 1), F uv
-      + ∑ uv ∈ Finset.Ico (iv + 1) qv, F uv + ∑ uv ∈ Finset.Ico qv (qv + 1), F uv
-      + ∑ uv ∈ Finset.Ico (qv + 1) jv, F uv + ∑ uv ∈ Finset.Ico jv (jv + 1), F uv
-      + ∑ uv ∈ Finset.Ico (jv + 1) n, F uv = ∑ uv ∈ Finset.Ico 0 n, F uv := by
-    rw [Finset.sum_Ico_consecutive F (Nat.zero_le iv) (by omega : iv ≤ iv + 1),
-      Finset.sum_Ico_consecutive F (Nat.zero_le (iv + 1)) (by omega : iv + 1 ≤ qv),
-      Finset.sum_Ico_consecutive F (Nat.zero_le qv) (by omega : qv ≤ qv + 1),
-      Finset.sum_Ico_consecutive F (Nat.zero_le (qv + 1)) (by omega : qv + 1 ≤ jv),
-      Finset.sum_Ico_consecutive F (Nat.zero_le jv) (by omega : jv ≤ jv + 1),
-      Finset.sum_Ico_consecutive F (Nat.zero_le (jv + 1)) (by omega : jv + 1 ≤ n)]
-  have htotal : ∑ uv ∈ Finset.Ico 0 n, F uv = ∑ u : Fin n, f u := by
-    rw [← Finset.range_eq_Ico, ← Fin.sum_univ_eq_sum_range F n]
-    exact Finset.sum_congr rfl fun u _ ↦ hval u.val u.isLt
-  have hmid5 : a + (qv - (iv + 1)) * b + c + (jv - (qv + 1)) * d + g
-      ≤ ∑ uv ∈ Finset.Ico iv (iv + 1), F uv + ∑ uv ∈ Finset.Ico (iv + 1) qv, F uv
-        + ∑ uv ∈ Finset.Ico qv (qv + 1), F uv + ∑ uv ∈ Finset.Ico (qv + 1) jv, F uv
-        + ∑ uv ∈ Finset.Ico jv (jv + 1), F uv :=
-    Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add eI e1) eQ) e2) eJ
-  have hdrop : ∑ uv ∈ Finset.Ico iv (iv + 1), F uv + ∑ uv ∈ Finset.Ico (iv + 1) qv, F uv
-      + ∑ uv ∈ Finset.Ico qv (qv + 1), F uv + ∑ uv ∈ Finset.Ico (qv + 1) jv, F uv
-      + ∑ uv ∈ Finset.Ico jv (jv + 1), F uv ≤ ∑ uv ∈ Finset.Ico 0 n, F uv := by
-    omega
-  exact hmid5.trans (hdrop.trans htotal.le)
 
 /-! ## The per-side walk bounds -/
 
