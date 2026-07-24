@@ -1,4 +1,5 @@
 import Kemeny.Rankings
+import Kemeny.Margins
 import Kemeny.KemenyScore
 
 /-!
