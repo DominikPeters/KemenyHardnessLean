@@ -7,6 +7,7 @@ import Kemeny.FromMaxCut.Construction
 import Kemeny.FromMaxCut.Margins
 import Kemeny.FromMaxCut.Forward
 import Kemeny.FromMaxCut.Meta
+import Kemeny.FromMaxCut.Gadget
 
 /-!
 # The Kemeny three-voters project
