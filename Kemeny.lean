@@ -1,10 +1,12 @@
 import Kemeny.Rankings
 import Kemeny.Margins
 import Kemeny.KemenyScore
+import Kemeny.Relabel
 import Kemeny.CloneContraction
 import Kemeny.Source
 import Kemeny.FromMaxCut.Construction
 import Kemeny.FromMaxCut.Margins
+import Kemeny.FromMaxCut.MinTotal
 import Kemeny.FromMaxCut.Forward
 import Kemeny.FromMaxCut.Meta
 import Kemeny.FromMaxCut.Gadget
