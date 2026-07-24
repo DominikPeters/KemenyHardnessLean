@@ -12,6 +12,8 @@ import Kemeny.FromMaxCut.Reverse
 import Kemeny.FromMaxCut.EdgeCost
 import Kemeny.FromMaxCut.EdgeCut
 import Kemeny.FromMaxCut.Walk
+import Kemeny.FromMaxCut.Assembly
+import Kemeny.FromMaxCut
 
 /-!
 # The Kemeny three-voters project
