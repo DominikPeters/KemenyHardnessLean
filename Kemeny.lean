@@ -2,6 +2,7 @@ import Kemeny.Rankings
 import Kemeny.Margins
 import Kemeny.KemenyScore
 import Kemeny.Relabel
+import Kemeny.Encoding
 import Kemeny.CloneContraction
 import Kemeny.Source
 import Kemeny.FromMaxCut.Construction
