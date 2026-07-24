@@ -3,6 +3,7 @@ import Kemeny.Margins
 import Kemeny.KemenyScore
 import Kemeny.Relabel
 import Kemeny.Encoding
+import Kemeny.BallotOrder
 import Kemeny.CloneContraction
 import Kemeny.Source
 import Kemeny.Source.Certified
@@ -10,6 +11,7 @@ import Kemeny.FromMaxCut.Construction
 import Kemeny.FromMaxCut.CanonEdges
 import Kemeny.FromMaxCut.Code
 import Kemeny.FromMaxCut.Ballots
+import Kemeny.FromMaxCut.CandNumbering
 import Kemeny.FromMaxCut.Program
 import Kemeny.FromMaxCut.Margins
 import Kemeny.FromMaxCut.MinTotal
