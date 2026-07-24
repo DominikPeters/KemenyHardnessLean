@@ -3,6 +3,8 @@ import Kemeny.Margins
 import Kemeny.KemenyScore
 import Kemeny.CloneContraction
 import Kemeny.Source
+import Kemeny.FromMaxCut.Construction
+import Kemeny.FromMaxCut.Margins
 
 /-!
 # The Kemeny three-voters project
