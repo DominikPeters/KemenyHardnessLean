@@ -123,6 +123,11 @@ theorem candNumbering_size (x : GraphTy.denote) :
 
 /-! ## The edges in canonical order -/
 
+/-- The `EdgePair`s of the decoded graph — the abstract edges the canonical list
+enumerates. -/
+abbrev DEdge (x : GraphTy.denote) : Type :=
+  EdgePair (decodeNumbered x).n (decodeNumbered x).G
+
 /-- The `EdgePair`s of the decoded graph, listed in canonical-edge-list order:
 the inverse enumeration bijection run over all positions. -/
 def edgeOrder (x : GraphTy.denote) :

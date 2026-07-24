@@ -120,10 +120,6 @@ open Hardness.VoterSpec
 
 variable {x : GraphTy.denote}
 
-/-- The `EdgePair`s of the decoded graph — the abstract edges the gaps hold. -/
-abbrev DEdge (x : GraphTy.denote) : Type :=
-  EdgePair (decodeNumbered x).n (decodeNumbered x).G
-
 /-- A **letter run**: the `M` members of supercandidate `lx` in gadget `u`, in
 member order. -/
 def letterSeg (x : GraphTy.denote) (u : Fin (decodeNumbered x).n) (lx : Letter) :
