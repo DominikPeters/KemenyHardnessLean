@@ -12,6 +12,7 @@ import Kemeny.FromMaxCut.CanonEdges
 import Kemeny.FromMaxCut.Code
 import Kemeny.FromMaxCut.Ballots
 import Kemeny.FromMaxCut.CandNumbering
+import Kemeny.FromMaxCut.AbsBallots
 import Kemeny.FromMaxCut.Program
 import Kemeny.FromMaxCut.Margins
 import Kemeny.FromMaxCut.MinTotal
