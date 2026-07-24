@@ -13,10 +13,15 @@ the entire claim is a kernel-checked enumeration of the `720` orders, and the
 packing argument survives only as the *reason* the enumeration comes out this
 way.
 
-An order of the letters is carried as an injective position function
-`Letter → Fin 6`; its cost is `wrongArcCost`, the total margin the profile
-charges for the within-gadget arcs the order ranks against the 2-of-3
-majority (`beats`). Enumerating the `6⁶` functions through the `Decidable`
+An order of the letters is carried as a position function `Letter → ℕ` that is
+injective with values below `6` — on a six-element domain that is exactly a
+bijection onto `{0, …, 5}`. Its cost is `wrongArcCost`, the total margin the
+profile charges for the within-gadget arcs the order ranks against the 2-of-3
+majority (`beats`). The classification is stated over `Letter → ℕ` rather than
+over `Letter → Fin 6` *on purpose*: its consumer's position function is
+`gadgetRank`, already `ℕ`-valued, and a `Fin 6`-valued statement would make
+every use site an `isDefEq` through `wrongArcCost`'s unfolded `Finset.sum`
+(12s a call — see `STYLE.md`). Enumerating the `6⁶` functions through the `Decidable`
 framework is infeasible (the `Fintype` instance on the function space blows
 up both elaborator and kernel), so the check is phrased as a `Bool`-valued
 fold over `List.finRange` with a `List`-computable cost (`decide +kernel`
@@ -109,25 +114,35 @@ private theorem checkOne_true (a b c d e f : Fin 6) : checkOne a b c d e f = tru
 
 section Classification
 
-variable {g : Letter → Fin 6}
+variable {f : Letter → ℕ}
 
-private theorem mkPos_eval (g : Letter → Fin 6) :
-    mkPos (g .A) (g .B) (g .C) (g .D) (g .E) (g .F) = fun x ↦ (g x : ℕ) := by
+/-- The `Fin 6` repackaging of a bounded position function — the shape the
+enumeration is phrased in, kept out of the classification's *statement*. -/
+private def toFin6 (hlt : ∀ x, f x < 6) (x : Letter) : Fin 6 := ⟨f x, hlt x⟩
+
+private theorem mkPos_eval (hlt : ∀ x, f x < 6) :
+    mkPos (toFin6 hlt .A) (toFin6 hlt .B) (toFin6 hlt .C) (toFin6 hlt .D)
+      (toFin6 hlt .E) (toFin6 hlt .F) = f := by
   funext x
   cases x <;> rfl
 
-private theorem distinct6_of_injective (hg : Function.Injective g) :
-    distinct6 (g .A) (g .B) (g .C) (g .D) (g .E) (g .F) = true := by
+private theorem distinct6_of_injective (hinj : Function.Injective f)
+    (hlt : ∀ x, f x < 6) :
+    distinct6 (toFin6 hlt .A) (toFin6 hlt .B) (toFin6 hlt .C) (toFin6 hlt .D)
+      (toFin6 hlt .E) (toFin6 hlt .F) = true := by
+  have hne : ∀ x y : Letter, x ≠ y → toFin6 hlt x ≠ toFin6 hlt y :=
+    fun x y hxy hc ↦ hxy (hinj (congrArg Fin.val hc))
   simp only [distinct6, Bool.and_eq_true, bne_iff_ne, ne_eq]
   repeat' apply And.intro
-  all_goals exact hg.ne (by decide)
+  all_goals exact hne _ _ (by decide)
 
-private theorem checkOne_unfold (hg : Function.Injective g) :
-    3 ≤ wrongArcCostL (fun x ↦ (g x : ℕ))
-      ∧ (wrongArcCostL (fun x ↦ (g x : ℕ)) ≠ 3
-          ∨ (∀ x, (g x : ℕ) = outPosL x) ∨ (∀ x, (g x : ℕ) = outPosR x)) := by
-  have hone := checkOne_true (g .A) (g .B) (g .C) (g .D) (g .E) (g .F)
-  rw [checkOne, distinct6_of_injective hg, mkPos_eval] at hone
+private theorem checkOne_unfold (hinj : Function.Injective f) (hlt : ∀ x, f x < 6) :
+    3 ≤ wrongArcCostL f
+      ∧ (wrongArcCostL f ≠ 3
+          ∨ (∀ x, f x = outPosL x) ∨ (∀ x, f x = outPosR x)) := by
+  have hone := checkOne_true (toFin6 hlt .A) (toFin6 hlt .B) (toFin6 hlt .C)
+    (toFin6 hlt .D) (toFin6 hlt .E) (toFin6 hlt .F)
+  rw [checkOne, distinct6_of_injective hinj hlt, mkPos_eval hlt] at hone
   simp only [Bool.not_true, Bool.false_or, Bool.and_eq_true, Bool.or_eq_true,
     bne_iff_ne, ne_eq, List.all_eq_true, beq_iff_eq] at hone
   refine ⟨Nat.le_of_ble_eq_true hone.1, ?_⟩
@@ -137,20 +152,30 @@ private theorem checkOne_unfold (hg : Function.Injective g) :
   · exact Or.inr (Or.inr fun x ↦ h x (mem_letterList x))
 
 /-- **Every injective letter order is wrong on at least three arcs.** -/
-theorem three_le_wrongArcCost (hg : Function.Injective g) :
-    3 ≤ wrongArcCost fun x ↦ (g x : ℕ) := by
+theorem three_le_wrongArcCost (hinj : Function.Injective f) (hlt : ∀ x, f x < 6) :
+    3 ≤ wrongArcCost f := by
   rw [wrongArcCost_eq_list]
-  exact (checkOne_unfold hg).1
+  exact (checkOne_unfold hinj hlt).1
 
 /-- **The two optimal orders**: an injective letter order wrong on exactly
 three arcs is `ABCDEF` or `DAEBFC`. -/
-theorem wrongArcCost_eq_three_cases (hg : Function.Injective g)
-    (h3 : wrongArcCost (fun x ↦ (g x : ℕ)) = 3) :
-    (∀ x, (g x : ℕ) = outPosL x) ∨ (∀ x, (g x : ℕ) = outPosR x) := by
+theorem wrongArcCost_eq_three_cases (hinj : Function.Injective f)
+    (hlt : ∀ x, f x < 6) (h3 : wrongArcCost f = 3) :
+    (∀ x, f x = outPosL x) ∨ (∀ x, f x = outPosR x) := by
   rw [wrongArcCost_eq_list] at h3
-  rcases (checkOne_unfold hg).2 with h | h
+  rcases (checkOne_unfold hinj hlt).2 with h | h
   · exact absurd h3 h
   · exact h
+
+/-- **The side bit of an optimal order** — `wrongArcCost_eq_three_cases`
+packaged as the colouring value the rigidity argument reads off a gadget, in
+the `if · then outPosL else outPosR` shape of `outSpec`'s `localPos`. -/
+theorem exists_side_of_wrongArcCost_eq_three (hinj : Function.Injective f)
+    (hlt : ∀ x, f x < 6) (h3 : wrongArcCost f = 3) :
+    ∃ b : Bool, ∀ x, f x = (if b then outPosL else outPosR) x := by
+  rcases wrongArcCost_eq_three_cases hinj hlt h3 with h | h
+  · exact ⟨true, h⟩
+  · exact ⟨false, h⟩
 
 end Classification
 

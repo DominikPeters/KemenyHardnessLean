@@ -374,127 +374,152 @@ def VertexAgree (r : LinearOrder (Cand n M G)) (χ : Fin n → Bool) : Prop :=
     r.lt (Sum.inl (u, x, m)) (Sum.inl (u', x', m'))
       ↔ ((outSpec n G χ).ranking M).lt (Sum.inl (u, x, m)) (Sum.inl (u', x', m'))
 
-set_option maxHeartbeats 800000 in
--- one `refine` in the trichotomy spends ~14s unifying through the spec
--- rankings, tipping just over the default limit
+/-- The gadget classification at an induced letter order: `gadgetRank` is
+injective with values below `6`, so it is one of the `720` orders the
+enumeration ranges over. -/
+theorem three_le_wrongArcCost_gadgetRank (r : LinearOrder (Cand n M G)) (m₀ : Fin M)
+    (u : Fin n) : 3 ≤ wrongArcCost (gadgetRank r m₀ u) :=
+  three_le_wrongArcCost (gadgetRank_injective r m₀ u) (gadgetRank_lt_six r m₀ u)
+
+/-- **The diagonal floor**: whatever the ranking, its gadgets are wrong on at
+least `3n` arcs between them. -/
+theorem three_mul_le_sum_wrongArcCost (r : LinearOrder (Cand n M G)) (m₀ : Fin M) :
+    3 * n ≤ ∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u) := by
+  calc 3 * n = ∑ _u : Fin n, 3 := by
+        simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+        ring
+    _ ≤ ∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u) :=
+        Finset.sum_le_sum fun u _ ↦ three_le_wrongArcCost_gadgetRank r m₀ u
+
+/-- **The diagonal ceiling**: a block ranking of margin cost below
+`3nM² + M²` has its gadgets wrong on at most `3n` arcs — the diagonal bound
+divided by `M²`. -/
+theorem sum_wrongArcCost_le_three_mul [DecidableRel G.Adj]
+    {r : LinearOrder (Cand n M G)} (hb : ∀ u x, BlockAt r u x) (m₀ : Fin M)
+    (hcost : marginCost (kemenyProfile n G M) r < 3 * n * M ^ 2 + M ^ 2) :
+    ∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u) ≤ 3 * n := by
+  have h2 : M ^ 2 * (∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u))
+      < M ^ 2 * (3 * n + 1) := by
+    calc M ^ 2 * (∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u))
+        ≤ marginCost (kemenyProfile n G M) r :=
+          mul_sum_wrongArcCost_le_marginCost hb m₀
+      _ < 3 * n * M ^ 2 + M ^ 2 := hcost
+      _ = M ^ 2 * (3 * n + 1) := by ring
+  exact Nat.lt_succ_iff.mp (Nat.lt_of_mul_lt_mul_left h2)
+
+/-- **Every gadget is optimal**: floor and ceiling meet pointwise, so on a
+cheap block ranking each gadget's induced order is wrong on exactly three
+arcs — a fourth would cost `M²`. -/
+theorem wrongArcCost_gadgetRank_eq_three [DecidableRel G.Adj]
+    {r : LinearOrder (Cand n M G)} (hb : ∀ u x, BlockAt r u x) (m₀ : Fin M)
+    (hcost : marginCost (kemenyProfile n G M) r < 3 * n * M ^ 2 + M ^ 2)
+    (u₀ : Fin n) : wrongArcCost (gadgetRank r m₀ u₀) = 3 := by
+  have h1 : wrongArcCost (gadgetRank r m₀ u₀)
+      + ∑ u ∈ Finset.univ.erase u₀, wrongArcCost (gadgetRank r m₀ u)
+      = ∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u) :=
+    Finset.add_sum_erase _ (fun u ↦ wrongArcCost (gadgetRank r m₀ u))
+      (Finset.mem_univ u₀)
+  have h2 : 3 * (n - 1)
+      ≤ ∑ u ∈ Finset.univ.erase u₀, wrongArcCost (gadgetRank r m₀ u) := by
+    calc 3 * (n - 1) = ∑ _u ∈ Finset.univ.erase u₀, 3 := by
+          rw [Finset.sum_const, Finset.card_erase_of_mem (Finset.mem_univ u₀),
+            Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+          ring
+      _ ≤ _ := Finset.sum_le_sum fun u _ ↦ three_le_wrongArcCost_gadgetRank r m₀ u
+  exact eq_three_of_squeeze h1 h2 (three_le_wrongArcCost_gadgetRank r m₀ u₀)
+    (sum_wrongArcCost_le_three_mul hb m₀ hcost) u₀.pos
+
+/-- **The gadgets ascend**: on a cheap block ranking no member of a later
+gadget outranks a member of an earlier one — the violated cross pair would
+cost `M²` on top of the diagonal's `3nM²`. -/
+theorem not_lt_of_gadget_val_lt [DecidableRel G.Adj]
+    {r : LinearOrder (Cand n M G)} (hb : ∀ u x, BlockAt r u x) (m₀ : Fin M)
+    (hcost : marginCost (kemenyProfile n G M) r < 3 * n * M ^ 2 + M ^ 2)
+    (ua ub : Fin n) (xa xb : Letter) (hval : ub.val < ua.val) :
+    ¬ r.lt (Sum.inl (ua, xa, m₀)) (Sum.inl (ub, xb, m₀)) := by
+  intro hlt
+  have h3 : 3 * n * M ^ 2 + M ^ 2 ≤ marginCost (kemenyProfile n G M) r := by
+    calc 3 * n * M ^ 2 + M ^ 2 = M ^ 2 * (3 * n) + M ^ 2 := by ring
+      _ ≤ M ^ 2 * (∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u)) + M ^ 2 :=
+          Nat.add_le_add_right
+            (Nat.mul_le_mul_left _ (three_mul_le_sum_wrongArcCost r m₀)) _
+      _ ≤ marginCost (kemenyProfile n G M) r :=
+          mul_sum_wrongArcCost_add_le_marginCost hb m₀ hval hlt
+  exact absurd (h3.trans_lt hcost) (lt_irrefl _)
+
+/-- **The forced structure is the agreement**: a block ranking whose gadgets
+ascend and whose induced letter orders are those of `χ` has its whole vertex
+part equal to `χ`'s output spec. The two hypotheses are read at a single
+member index `m₀`; `BlockAt` spreads them to all members. -/
+theorem vertexAgree_of_gadgetRank_eq {r : LinearOrder (Cand n M G)} {m₀ : Fin M}
+    (hb : ∀ u x, BlockAt r u x)
+    (hasc : ∀ (ua ub : Fin n) (xa xb : Letter), ub.val < ua.val →
+      ¬ r.lt (Sum.inl (ua, xa, m₀)) (Sum.inl (ub, xb, m₀)))
+    {χ : Fin n → Bool}
+    (hrank : ∀ u x, gadgetRank r m₀ u x = (if χ u then outPosL else outPosR) x) :
+    VertexAgree r χ := by
+  intro u x m u' x' m'
+  rw [VoterSpec.lt_vertex_vertex]
+  simp only [outSpec]
+  rcases Nat.lt_trichotomy u.val u'.val with hval | hval | hval
+  · refine iff_of_true ?_ (Or.inl hval)
+    have hnot : ¬ r.lt (Sum.inl (u', x', m')) (Sum.inl (u, x, m)) := by
+      rw [blockAt_lt_transfer hb
+        (fun h ↦ by rw [h.1] at hval; exact lt_irrefl _ hval) m' m m₀ m₀]
+      exact hasc u' u x' x hval
+    have hnexy : (Sum.inl (u', x', m') : Cand n M G) ≠ Sum.inl (u, x, m) := by
+      intro hc
+      simp only [Sum.inl.injEq, Prod.mk.injEq] at hc
+      rw [hc.1] at hval
+      exact lt_irrefl _ hval
+    exact ranks_of_not_ranks hnexy hnot
+  · have hu : u = u' := Fin.ext hval
+    subst hu
+    by_cases hxx : x = x'
+    · subst hxx
+      simp only [lt_self_iff_false, false_or, true_and]
+      exact (hb u x).1 m m'
+    · have hiff : r.lt (Sum.inl (u, x, m)) (Sum.inl (u, x', m'))
+          ↔ gadgetRank r m₀ u x < gadgetRank r m₀ u x' :=
+        (blockAt_lt_transfer hb (fun h ↦ hxx h.2) m m' m₀ m₀).trans
+          (gadgetRank_lt_iff r m₀ u).symm
+      rw [hiff, hrank u x, hrank u x']
+      constructor
+      · intro h
+        exact Or.inr ⟨rfl, Or.inl h⟩
+      · rintro (h | ⟨-, h | ⟨heq, -⟩⟩)
+        · exact absurd h (lt_irrefl _)
+        · exact h
+        · exfalso
+          cases hbb : χ u
+          · simp only [hbb, Bool.false_eq_true, if_false] at heq
+            exact hxx (outPosR_inj heq)
+          · simp only [hbb, if_true] at heq
+            exact hxx (outPosL_inj heq)
+  · refine iff_of_false ?_ ?_
+    · rw [blockAt_lt_transfer hb
+        (fun h ↦ by rw [h.1] at hval; exact lt_irrefl _ hval) m m' m₀ m₀]
+      exact hasc u u' x x' hval
+    · rintro (h | ⟨h, -⟩)
+      · exact absurd h (Nat.lt_asymm hval)
+      · exact absurd h (Nat.ne_of_gt hval)
+
 /-- **Rigidity**: a block ranking of margin cost below `3nM² + M²` has its
 vertex part completely determined by a colouring — each gadget in `ABCDEF` or
 `DAEBFC` order (else a fourth wrong arc costs `M²`) and the gadgets
-ascending (else a violated cross pair costs `M²`). -/
+ascending (else a violated cross pair costs `M²`). The colouring is the
+gadgets' side bits, harvested by `choose`. -/
 theorem exists_vertexAgree [DecidableRel G.Adj] (hM : 0 < M)
     {r : LinearOrder (Cand n M G)} (hb : ∀ u x, BlockAt r u x)
     (hcost : marginCost (kemenyProfile n G M) r < 3 * n * M ^ 2 + M ^ 2) :
     ∃ χ : Fin n → Bool, VertexAgree r χ := by
   have m₀ : Fin M := ⟨0, hM⟩
-  have hginj : ∀ u : Fin n, Function.Injective
-      (fun x : Letter ↦ (⟨gadgetRank r m₀ u x, gadgetRank_lt_six r m₀ u x⟩ : Fin 6)) := by
-    intro u x x' h
-    apply gadgetRank_injective r m₀ u
-    exact congrArg Fin.val h
-  have hwa3 : ∀ u, 3 ≤ wrongArcCost (gadgetRank r m₀ u) := fun u ↦
-    three_le_wrongArcCost (hginj u)
-  have hSle : ∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u) ≤ 3 * n := by
-    have h2 : M ^ 2 * (∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u))
-        < M ^ 2 * (3 * n + 1) := by
-      calc M ^ 2 * (∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u))
-          ≤ marginCost (kemenyProfile n G M) r :=
-            mul_sum_wrongArcCost_le_marginCost hb m₀
-        _ < 3 * n * M ^ 2 + M ^ 2 := hcost
-        _ = M ^ 2 * (3 * n + 1) := by ring
-    exact Nat.lt_succ_iff.mp (Nat.lt_of_mul_lt_mul_left h2)
-  have hSge : 3 * n ≤ ∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u) := by
-    calc 3 * n = ∑ _u : Fin n, 3 := by
-          simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
-          ring
-      _ ≤ ∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u) :=
-          Finset.sum_le_sum fun u _ ↦ hwa3 u
-  have hnov : ∀ (ua ub : Fin n) (xa xb : Letter), ub.val < ua.val →
-      ¬ r.lt (Sum.inl (ua, xa, m₀)) (Sum.inl (ub, xb, m₀)) := by
-    intro ua ub xa xb hval hlt
-    have h2 := mul_sum_wrongArcCost_add_le_marginCost hb m₀ hval hlt
-    have h3 : 3 * n * M ^ 2 + M ^ 2 ≤ marginCost (kemenyProfile n G M) r := by
-      calc 3 * n * M ^ 2 + M ^ 2 = M ^ 2 * (3 * n) + M ^ 2 := by ring
-        _ ≤ M ^ 2 * (∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u)) + M ^ 2 :=
-            Nat.add_le_add_right (Nat.mul_le_mul_left _ hSge) _
-        _ ≤ marginCost (kemenyProfile n G M) r := h2
-    exact absurd (h3.trans_lt hcost) (lt_irrefl _)
-  have hwa_eq : ∀ u, wrongArcCost (gadgetRank r m₀ u) = 3 := by
-    intro u₀
-    have h1 : wrongArcCost (gadgetRank r m₀ u₀)
-        + ∑ u ∈ Finset.univ.erase u₀, wrongArcCost (gadgetRank r m₀ u)
-        = ∑ u : Fin n, wrongArcCost (gadgetRank r m₀ u) :=
-      Finset.add_sum_erase _ (fun u ↦ wrongArcCost (gadgetRank r m₀ u))
-        (Finset.mem_univ u₀)
-    have h2 : 3 * (n - 1)
-        ≤ ∑ u ∈ Finset.univ.erase u₀, wrongArcCost (gadgetRank r m₀ u) := by
-      calc 3 * (n - 1) = ∑ _u ∈ Finset.univ.erase u₀, 3 := by
-            rw [Finset.sum_const, Finset.card_erase_of_mem (Finset.mem_univ u₀),
-              Finset.card_univ, Fintype.card_fin, smul_eq_mul]
-            ring
-        _ ≤ _ := Finset.sum_le_sum fun u _ ↦ hwa3 u
-    exact eq_three_of_squeeze h1 h2 (hwa3 u₀) hSle u₀.pos
-  have hLR : ∀ u, (∀ x, gadgetRank r m₀ u x = outPosL x)
-      ∨ (∀ x, gadgetRank r m₀ u x = outPosR x) := fun u ↦
-    wrongArcCost_eq_three_cases (hginj u) (hwa_eq u)
-  -- the agreement, for any colouring matching the ranks
-  have key : ∀ χ : Fin n → Bool,
-      (∀ u x, gadgetRank r m₀ u x = (if χ u then outPosL else outPosR) x) →
-      VertexAgree r χ := by
-    intro χ hrank u x m u' x' m'
-    rw [VoterSpec.lt_vertex_vertex]
-    simp only [outSpec]
-    rcases Nat.lt_trichotomy u.val u'.val with hval | hval | hval
-    · refine iff_of_true ?_ (Or.inl hval)
-      have hnot : ¬ r.lt (Sum.inl (u', x', m')) (Sum.inl (u, x, m)) := by
-        rw [blockAt_lt_transfer hb
-          (fun h ↦ by rw [h.1] at hval; exact lt_irrefl _ hval) m' m m₀ m₀]
-        exact hnov u' u x' x hval
-      have hnexy : (Sum.inl (u', x', m') : Cand n M G) ≠ Sum.inl (u, x, m) := by
-        intro hc
-        simp only [Sum.inl.injEq, Prod.mk.injEq] at hc
-        rw [hc.1] at hval
-        exact lt_irrefl _ hval
-      exact ranks_of_not_ranks hnexy hnot
-    · have hu : u = u' := Fin.ext hval
-      subst hu
-      by_cases hxx : x = x'
-      · subst hxx
-        simp only [lt_self_iff_false, false_or, true_and]
-        exact (hb u x).1 m m'
-      · have hiff : r.lt (Sum.inl (u, x, m)) (Sum.inl (u, x', m'))
-            ↔ gadgetRank r m₀ u x < gadgetRank r m₀ u x' :=
-          (blockAt_lt_transfer hb (fun h ↦ hxx h.2) m m' m₀ m₀).trans
-            (gadgetRank_lt_iff r m₀ u).symm
-        rw [hiff, hrank u x, hrank u x']
-        constructor
-        · intro h
-          exact Or.inr ⟨rfl, Or.inl h⟩
-        · rintro (h | ⟨-, h | ⟨heq, -⟩⟩)
-          · exact absurd h (lt_irrefl _)
-          · exact h
-          · exfalso
-            cases hbb : χ u
-            · simp only [hbb, Bool.false_eq_true, if_false] at heq
-              exact hxx (outPosR_inj heq)
-            · simp only [hbb, if_true] at heq
-              exact hxx (outPosL_inj heq)
-    · refine iff_of_false ?_ ?_
-      · rw [blockAt_lt_transfer hb
-          (fun h ↦ by rw [h.1] at hval; exact lt_irrefl _ hval) m m' m₀ m₀]
-        exact hnov u u' x x' hval
-      · rintro (h | ⟨h, -⟩)
-        · exact absurd h (Nat.lt_asymm hval)
-        · exact absurd h (Nat.ne_of_gt hval)
-  refine ⟨fun u ↦ decide (∀ x, gadgetRank r m₀ u x = outPosL x), key _ ?_⟩
-  intro u x
-  rcases hLR u with hL | hR
-  · rw [if_pos (decide_eq_true hL)]
-    exact hL x
-  · rw [if_neg ?_]
-    · exact hR x
-    · simp only [decide_eq_true_eq]
-      intro hL'
-      have hcontra := (hL' Letter.A).symm.trans (hR Letter.A)
-      simp [outPosL, outPosR] at hcontra
+  have hside : ∀ u : Fin n, ∃ b : Bool,
+      ∀ x, gadgetRank r m₀ u x = (if b then outPosL else outPosR) x := fun u ↦
+    exists_side_of_wrongArcCost_eq_three (gadgetRank_injective r m₀ u)
+      (gadgetRank_lt_six r m₀ u) (wrongArcCost_gadgetRank_eq_three hb m₀ hcost u)
+  choose χ hχ using hside
+  exact ⟨χ, vertexAgree_of_gadgetRank_eq hb
+    (not_lt_of_gadget_val_lt hb m₀ hcost) hχ⟩
 
 end Hardness
