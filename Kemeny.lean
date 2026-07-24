@@ -9,6 +9,7 @@ import Kemeny.Source.Certified
 import Kemeny.FromMaxCut.Construction
 import Kemeny.FromMaxCut.CanonEdges
 import Kemeny.FromMaxCut.Code
+import Kemeny.FromMaxCut.Ballots
 import Kemeny.FromMaxCut.Margins
 import Kemeny.FromMaxCut.MinTotal
 import Kemeny.FromMaxCut.Forward
