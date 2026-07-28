@@ -1,0 +1,18 @@
+name = "KemenyHardness"
+version = "0.1.0"
+defaultTargets = ["KemenyHardness"]
+
+[leanOptions]
+pp.unicode.fun = true
+relaxedAutoImplicit = false
+weak.linter.mathlibStandardSet = true
+weak.linter.style.header = false
+maxSynthPendingDepth = 3
+
+[[require]]
+name = "hardness_reductions"
+git = "https://github.com/DominikPeters/HardnessReductionsLean.git"
+rev = "d2805935d74055a49cdadbd47da7b1e37bf0bacc"
+
+[[lean_lib]]
+name = "KemenyHardness"

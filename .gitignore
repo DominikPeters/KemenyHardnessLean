@@ -1,0 +1,5 @@
+# cache and other artifacts produced by Lean's Lake build tool
+.lake/
+materials/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
